@@ -502,6 +502,15 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
     */
   final def <> (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): Unit = this.bulkConnect(that)(sourceInfo, connectionCompileOptions) // scalastyle:ignore line.size.limit
 
+
+
+  /** Connect this to that $coll mono-directionally hand side and element-wise.
+    *
+    * @param that the $coll to connect to
+    * @group Connect
+    */
+  def >>> (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): Unit = this.connect(that)(sourceInfo, connectionCompileOptions) // scalastyle:ignore line.size.limit
+
   @chiselRuntimeDeprecated
   @deprecated("litArg is deprecated, use litOption or litTo*Option", "3.2")
   def litArg(): Option[LitArg] = topBindingOpt match {

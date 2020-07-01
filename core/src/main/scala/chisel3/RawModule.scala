@@ -35,7 +35,7 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions)
   // Other Internal Functions
   //
   // For debuggers/testers, TODO: refactor out into proper public API
-  private var _firrtlPorts: Option[Seq[firrtl.Port]] = None
+  private[chisel3] var _firrtlPorts: Option[Seq[firrtl.Port]] = None
   lazy val getPorts = _firrtlPorts.get
 
   val compileOptions = moduleCompileOptions
