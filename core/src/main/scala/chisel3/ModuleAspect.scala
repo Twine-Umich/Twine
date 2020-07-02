@@ -17,6 +17,8 @@ abstract class ModuleAspect private[chisel3] (module: RawModule)
 
   Builder.addAspect(module, this)
 
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
   override def circuitName: String = module.toTarget.circuit
 
   override def desiredName: String = module.name

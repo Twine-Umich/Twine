@@ -13,6 +13,9 @@ class BasicTester extends Module() {
   // The testbench has no IOs, rather it should communicate using printf, assert, and stop.
   val io = IO(new Bundle() {})
 
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
+
   def popCount(n: Long): Int = n.toBinaryString.count(_=='1')
 
   /** Ends the test reporting success.

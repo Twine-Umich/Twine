@@ -323,9 +323,10 @@ package object Chisel {     // scalastyle:ignore package.object.name number.of.t
       this(Option(_clock), Option(_reset))(moduleCompileOptions)
 
     override def _compatAutoWrapPorts(): Unit = { // scalastyle:ignore method.name
-      if (!_compatIoPortBound() && io != null) {
-        _bindIoInPlace(io)
-      }
+      // if (!_compatIoPortBound() && io != null) {
+      //   _bindIoInPlace(io)
+      // }
+      ()
     }
   }
 
@@ -505,6 +506,7 @@ package object Chisel {     // scalastyle:ignore package.object.name number.of.t
   sealed class QueueCompatibility[T <: Data](gen: T, entries: Int, pipe: Boolean = false, flow: Boolean = false)
                                  (implicit compileOptions: chisel3.CompileOptions)
       extends chisel3.util.Queue[T](gen, entries, pipe, flow)(compileOptions) {
+  
 
     def this(gen: T, entries: Int, pipe: Boolean, flow: Boolean, override_reset: Option[Bool]) = {
       this(gen, entries, pipe, flow)

@@ -44,7 +44,8 @@ class GaloisLFSR(
   val reduction: LFSRReduce = XOR,
   step: Int = 1,
   updateSeed: Boolean = false) extends PRNG(width, seed, step, updateSeed) with LFSR {
-
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
   def delta(s: Seq[Bool]): Seq[Bool] = {
     val first = s.head
     (s.tail :+ first)

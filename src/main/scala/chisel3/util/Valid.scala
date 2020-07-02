@@ -183,6 +183,7 @@ class Pipe[T <: Data](gen: T, latency: Int = 1)(implicit compileOptions: Compile
   }
 
   val io = IO(new PipeIO)
-
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
   io.deq <> Pipe(io.enq, latency)
 }

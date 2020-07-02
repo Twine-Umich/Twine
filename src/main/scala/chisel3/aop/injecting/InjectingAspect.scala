@@ -41,6 +41,7 @@ abstract class InjectorAspect[T <: RawModule, M <: RawModule](
     selectRoots: T => Iterable[M],
     injection: M => Unit
 ) extends Aspect[T] {
+
   final def toAnnotation(top: T): AnnotationSeq = {
     toAnnotation(selectRoots(top), top.name)
   }

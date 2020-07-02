@@ -509,7 +509,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
     * @param that the $coll to connect to
     * @group Connect
     */
-  def >>> (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): Unit = this.connect(that)(sourceInfo, connectionCompileOptions) // scalastyle:ignore line.size.limit
+  def >>> (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): Unit = that.connect(this)(sourceInfo, connectionCompileOptions) // scalastyle:ignore line.size.limit
 
   @chiselRuntimeDeprecated
   @deprecated("litArg is deprecated, use litOption or litTo*Option", "3.2")

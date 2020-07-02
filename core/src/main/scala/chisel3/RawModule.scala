@@ -31,6 +31,11 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions)
     _commands.toSeq
   }
 
+  // IO for this Module. At the Scala level (pre-FIRRTL transformations),
+  // connections in and out of a Module may only go through `io` elements.
+  def in: Record
+  def out: Record
+
   //
   // Other Internal Functions
   //
@@ -57,6 +62,41 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions)
     }
   }
 
+  /** Connect this to that $coll mono-directionally hand side and element-wise.
+      *
+      * @param that the $coll to connect to
+      * @group Connect
+      */
+  def >>> (that: RawModule)(implicit connectionCompileOptions:CompileOptions): RawModule = {
+    implicit val sourceInfo = UnlocatableSourceInfo
+    val input_ports = that.in.getElements
+    val output_ports = this.out.getElements
+    if(input_ports.size != output_ports.size){
+      throwException("The input does not match with outputs")
+    }
+    for((input_port, idx) <- input_ports.zipWithIndex){
+      input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
+    }
+    that
+  }
+
+  /** Connect this to that $coll mono-directionally hand side and element-wise.
+      *
+      * @param that the $coll to connect to
+      * @group Connect
+      */
+  def >>> (that: Aggregate)(implicit connectionCompileOptions:CompileOptions): Aggregate = {
+    implicit val sourceInfo = UnlocatableSourceInfo
+    val input_ports = that.getElements
+    val output_ports = this.out.getElements
+    if(input_ports.size != output_ports.size){
+      throwException("The input does not match with outputs")
+    }
+    for((input_port, idx) <- input_ports.zipWithIndex){
+      input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
+    }
+    that
+  }
 
   private[chisel3] override def generateComponent(): Component = { // scalastyle:ignore cyclomatic.complexity
     require(!_closed, "Can't generate module more than once")
@@ -189,12 +229,8 @@ package internal {
     protected var override_clock: Option[Clock] = None
     protected var override_reset: Option[Bool] = None
 
-    // IO for this Module. At the Scala level (pre-FIRRTL transformations),
-    // connections in and out of a Module may only go through `io` elements.
-    def io: Record
-
     // Allow access to bindings from the compatibility package
-    protected def _compatIoPortBound() = portsContains(io)// scalastyle:ignore method.name
+    // protected def _compatIoPortBound() = portsContains(io)// scalastyle:ignore method.name
 
     private[chisel3] override def namePorts(names: HashMap[HasId, String]): Unit = {
       for (port <- getModulePorts) {
@@ -209,10 +245,12 @@ package internal {
       _compatAutoWrapPorts()  // pre-IO(...) compatibility hack
 
       // Restrict IO to just io, clock, and reset
-      require(io != null, "Module must have io")
-      require(portsContains(io), "Module must have io wrapped in IO(...)")
+      require(in != null, "Module must have in")
+      require(out != null, "Module must have out")
+      require(portsContains(in), "Module must have in wrapped in IO(...)")
+      require(portsContains(out), "Module must have io wrapped in IO(...)")
       require((portsContains(clock)) && (portsContains(reset)), "Internal error, module did not have clock or reset as IO") // scalastyle:ignore line.size.limit
-      require(portsSize == 3, "Module must only have io, clock, and reset as IO")
+      // require(portsSize == 4, "Module must only have in, out, clock, and reset as IO")
 
       super.generateComponent()
     }
@@ -222,9 +260,9 @@ package internal {
       // module de-duplication in FIRRTL emission.
       implicit val sourceInfo = UnlocatableSourceInfo
 
-      if (!parentCompileOptions.explicitInvalidate) {
-        pushCommand(DefInvalid(sourceInfo, io.ref))
-      }
+      // if (!parentCompileOptions.explicitInvalidate) {
+      //   pushCommand(DefInvalid(sourceInfo, io.ref))
+      // }
 
       clock := override_clock.getOrElse(Builder.forcedClock)
       reset := override_reset.getOrElse(Builder.forcedReset)

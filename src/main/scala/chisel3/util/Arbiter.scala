@@ -71,7 +71,8 @@ class LockingRRArbiter[T <: Data](gen: T, n: Int, count: Int, needsLock: Option[
     val ctrl = ArbiterCtrl((0 until n).map(i => validMask(i)) ++ io.in.map(_.valid))
     (0 until n).map(i => ctrl(i) && grantMask(i) || ctrl(i + n))
   }
-
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
   override lazy val choice = WireDefault((n-1).asUInt)
   for (i <- n-2 to 0 by -1)
     when (io.in(i).valid) { choice := i.asUInt }
@@ -81,6 +82,8 @@ class LockingRRArbiter[T <: Data](gen: T, n: Int, count: Int, needsLock: Option[
 
 class LockingArbiter[T <: Data](gen: T, n: Int, count: Int, needsLock: Option[T => Bool] = None)
     extends LockingArbiterLike[T](gen, n, count, needsLock) {
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
   def grant: Seq[Bool] = ArbiterCtrl(io.in.map(_.valid))
 
   override lazy val choice = WireDefault((n-1).asUInt)
@@ -119,7 +122,8 @@ class RRArbiter[T <: Data](gen:T, n: Int) extends LockingRRArbiter[T](gen, n, 1)
 @chiselName
 class Arbiter[T <: Data](gen: T, n: Int) extends Module {
   val io = IO(new ArbiterIO(gen, n))
-
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
   io.chosen := (n-1).asUInt
   io.out.bits := io.in(n-1).bits
   for (i <- n-2 to 0 by -1) {

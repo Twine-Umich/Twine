@@ -48,7 +48,8 @@ class FibonacciLFSR(
   updateSeed: Boolean = false) extends PRNG(width, seed, step, updateSeed) with LFSR {
 
   def delta(s: Seq[Bool]): Seq[Bool] = taps.map{ case i => s(i - 1) }.reduce(reduction) +: s.dropRight(1)
-
+  val in = IO(new Bundle() {})
+  val out = IO(new Bundle() {})
 }
 
 /** A maximal period Fibonacci Linear Feedback Shift Register (LFSR) generator. The maximal period taps are sourced from

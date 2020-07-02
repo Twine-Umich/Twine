@@ -12,7 +12,8 @@ import java.util.IdentityHashMap
 import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
-import chisel3.internal.sourceinfo.{InstTransform, SourceInfo}
+import chisel3.internal.sourceinfo.{DeprecatedSourceInfo, SourceInfo, SourceInfoTransform, UnlocatableSourceInfo}
+import chisel3.internal.sourceinfo.InstTransform
 import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{ModuleName, ModuleTarget, IsModule}
 
@@ -199,6 +200,50 @@ package experimental {
       require(_closed, "Can't get ports before module close")
       _ports.toSeq
     }
+
+    protected[chisel3] def getModuleInputPorts = {
+      require(_closed, "Can't get ports before module close")
+      val input_ports = new ArrayBuffer[Data]()
+      for(port <- _ports){
+        val direction = port match {
+          case v: Vec[_] => v.specifiedDirection match {
+            case SpecifiedDirection.Input => SpecifiedDirection.Input
+            case SpecifiedDirection.Output => SpecifiedDirection.Output
+            case SpecifiedDirection.Flip => SpecifiedDirection.flip(v.sample_element.specifiedDirection)
+            case SpecifiedDirection.Unspecified => v.sample_element.specifiedDirection
+          }
+          case _ => port.specifiedDirection
+        }
+        direction match{
+            case SpecifiedDirection.Input => input_ports += port
+            case _ => ()
+        }        
+      }
+      input_ports.toSeq
+    }
+
+    // getPorts unfortunately already used for tester compatibility
+    protected[chisel3] def getModuleOutputPorts = {
+      require(_closed, "Can't get ports before module close")
+      val output_ports = new ArrayBuffer[Data]()
+      for(port <- _ports){
+        val direction = port match {
+          case v: Vec[_] => v.specifiedDirection match {
+            case SpecifiedDirection.Input => SpecifiedDirection.Input
+            case SpecifiedDirection.Output => SpecifiedDirection.Output
+            case SpecifiedDirection.Flip => SpecifiedDirection.flip(v.sample_element.specifiedDirection)
+            case SpecifiedDirection.Unspecified => v.sample_element.specifiedDirection
+          }
+          case _ => port.specifiedDirection
+        }
+        direction match{
+            case SpecifiedDirection.Output => output_ports += port
+            case _ => ()
+        }        
+      }
+      output_ports.toSeq
+    }
+
 
     // These methods allow checking some properties of ports before the module is closed,
     // mainly for compatibility purposes.
