@@ -3,10 +3,15 @@
 package chisel3.util.experimental
 
 import chisel3._
+<<<<<<< HEAD
 import chisel3.experimental.annotate
 // import chisel3.InstanceId
 import chisel3.experimental.{ChiselAnnotation, RunFirrtlTransform}
 import firrtl.annotations.{MemoryLoadFileType, _}
+=======
+import chisel3.experimental.{RunFirrtlTransform, annotate, ChiselAnnotation}
+import firrtl.annotations._
+>>>>>>> alpha-7.1.2020
 import firrtl.ir.{Module => _, _}
 import firrtl.transforms.BlackBoxInlineAnno
 import firrtl.Mappers._
@@ -18,7 +23,11 @@ import scala.collection.mutable
   * and the format of the file.
   * @param target        memory to load
   * @param fileName      name of input file
+<<<<<<< HEAD
   * @param hexOrBinary   use $readmemh or $readmemb, i.e. hex or binary text input, default is hex
+=======
+  * @param hexOrBinary   use \$readmemh or \$readmemb, i.e. hex or binary text input, default is hex
+>>>>>>> alpha-7.1.2020
   */
 case class ChiselLoadMemoryAnnotation[T <: Data](
   target:      MemBase[T],
@@ -36,11 +45,17 @@ case class ChiselLoadMemoryAnnotation[T <: Data](
   def transformClass: Class[LoadMemoryTransform] = classOf[LoadMemoryTransform]
 
   def toFirrtl: LoadMemoryAnnotation = {
+<<<<<<< HEAD
     LoadMemoryAnnotation(target.toNamed.asInstanceOf[ComponentName], fileName, hexOrBinary)
+=======
+    val tx = target.toNamed.asInstanceOf[ComponentName]
+    LoadMemoryAnnotation(tx, fileName, hexOrBinary, Some(tx.name))
+>>>>>>> alpha-7.1.2020
   }
 }
 
 
+<<<<<<< HEAD
 object loadMemoryFromFile {
   /** Use this annotation generator to load a memory from a text file by using verilator and
     *  verilog's $readmemh or $readmemb.
@@ -97,6 +112,74 @@ object loadMemoryFromFile {
     * ==More info==
     * See the LoadMemoryFromFileSpec.scala in the test suite for more examples
     * @see <a href="https://github.com/freechipsproject/chisel3/wiki/Chisel-Memories">Load Memories in the wiki</a>
+=======
+/** [[loadMemoryFromFile]] is an annotation generator that helps with loading a memory from a text file. This relies on
+  * Verilator and Verilog's `\$readmemh` or `\$readmemb`. The [[https://github.com/freechipsproject/treadle Treadle
+  * backend]] can also recognize this annotation and load memory at run-time.
+  *
+  * This annotation, when the FIRRTL compiler runs, triggers the [[LoadMemoryTransform]]. That will add Verilog
+  * directives to enable the specified memories to be initialized from files.
+  *
+  * ==Example module==
+  *
+  * Consider a simple Module containing a memory:
+  * {{{
+  * import chisel3._
+  * class UsesMem(memoryDepth: Int, memoryType: Data) extends Module {
+  *   val io = IO(new Bundle {
+  *     val address = Input(UInt(memoryType.getWidth.W))
+  *     val value   = Output(memoryType)
+  *   })
+  *   val memory = Mem(memoryDepth, memoryType)
+  *   io.value := memory(io.address)
+  * }
+  * }}}
+  *
+  * ==Above module with annotation==
+  *
+  * To load this memory from the file `/workspace/workdir/mem1.hex.txt` just add an import and annotate the memory:
+  * {{{
+  * import chisel3._
+  * import chisel3.util.experimental.loadMemoryFromFile   // <<-- new import here
+  * class UsesMem(memoryDepth: Int, memoryType: Data) extends Module {
+  *   val io = IO(new Bundle {
+  *     val address = Input(UInt(memoryType.getWidth.W))
+  *     val value   = Output(memoryType)
+  *   })
+  *   val memory = Mem(memoryDepth, memoryType)
+  *   io.value := memory(io.address)
+  *   loadMemoryFromFile(memory, "/workspace/workdir/mem1.hex.txt")  // <<-- Note the annotation here
+  * }
+  * }}}
+  *
+  * ==Example file format==
+  *
+  * A memory file should consist of ASCII text in either hex or binary format. The following example shows such a
+  * file formatted to use hex:
+  * {{{
+  *   0
+  *   7
+  *   d
+  *  15
+  * }}}
+  *
+  * A binary file can be similarly constructed.
+  *
+  * @see
+  * [[https://github.com/freechipsproject/chisel3/tree/master/src/test/scala/chiselTests/LoadMemoryFromFileSpec.scala
+  * LoadMemoryFromFileSpec.scala]] in the test suite for additional examples.
+  * @see Chisel3 Wiki entry on
+  * [[https://github.com/freechipsproject/chisel3/wiki/Chisel-Memories#loading-memories-in-simulation "Loading Memories
+  * in Simulation"]]
+  */
+object loadMemoryFromFile {
+
+
+  /** Annotate a memory such that it can be initialized using a file
+    * @param memory the memory
+    * @param filename the file used for initialization
+    * @param hexOrBinary whether the file uses a hex or binary number representation
+>>>>>>> alpha-7.1.2020
     */
   def apply[T <: Data](
     memory: MemBase[T],
@@ -107,6 +190,7 @@ object loadMemoryFromFile {
   }
 }
 
+<<<<<<< HEAD
 /**
   * This transform only is activated if verilog is being generated
   * (determined by presence of the proper emit annotation)
@@ -116,6 +200,14 @@ object loadMemoryFromFile {
   * Currently the only non-verilog based simulation that can support loading
   * memory from a file is treadle but it does not need this transform
   * to do that.
+=======
+/** This transform only is activated if Verilog is being generated (determined by presence of the proper emit
+  * annotation) when activated it creates additional Verilog files that contain modules bound to the modules that
+  * contain an initializable memory
+  *
+  * Currently the only non-Verilog based simulation that can support loading memory from a file is treadle but it does
+  * not need this transform to do that.
+>>>>>>> alpha-7.1.2020
   */
 //scalastyle:off method.length
 class LoadMemoryTransform extends Transform {
@@ -128,8 +220,12 @@ class LoadMemoryTransform extends Transform {
 
   private val verilogEmitter:    VerilogEmitter = new VerilogEmitter
 
+<<<<<<< HEAD
   /**
     * run the pass
+=======
+  /** run the pass
+>>>>>>> alpha-7.1.2020
     * @param circuit the circuit
     * @param annotations all the annotations
     * @return
@@ -149,12 +245,19 @@ class LoadMemoryTransform extends Transform {
 
     val modulesByName = circuit.modules.collect { case module: firrtl.ir.Module =>  module.name -> module }.toMap
 
+<<<<<<< HEAD
     /**
       * walk the module and for memories that have LoadMemory annotations
       * generate the bindable modules for verilog emission
       *
       * @param myModule     module being searched for memories
       */
+=======
+    /* Walk the module and for memories that are annotated with [[LoadMemoryAnnotation]]s generate the bindable modules for
+     * Verilog emission.
+     * @param myModule module being searched for memories
+     */
+>>>>>>> alpha-7.1.2020
     def processModule(myModule: DefModule): DefModule = {
 
       def makePath(componentName: String): String = {
@@ -167,6 +270,13 @@ class LoadMemoryTransform extends Transform {
         memoryAnnotations.get(fullMemoryName) match {
           case Some(lma @ LoadMemoryAnnotation(ComponentName(componentName, moduleName), _, hexOrBinary, _)) =>
             val writer = new java.io.StringWriter
+<<<<<<< HEAD
+=======
+            val readmem = hexOrBinary match {
+              case MemoryLoadFileType.Binary => "$readmemb"
+              case MemoryLoadFileType.Hex => "$readmemh"
+            }
+>>>>>>> alpha-7.1.2020
 
             modulesByName.get(moduleName.name).foreach { module =>
                 val renderer = verilogEmitter.getRenderer(module, modulesByName)(writer)
@@ -177,7 +287,11 @@ class LoadMemoryTransform extends Transform {
                 renderer.emitVerilogBind(bindsToName,
                   s"""
                      |initial begin
+<<<<<<< HEAD
                      |  $$readmem$hexOrBinary("$loadFileName", ${myModule.name}.$componentName);
+=======
+                     |  $readmem("$loadFileName", ${myModule.name}.$componentName);
+>>>>>>> alpha-7.1.2020
                      |end
                       """.stripMargin)
                 val inLineText = writer.toString + "\n" +

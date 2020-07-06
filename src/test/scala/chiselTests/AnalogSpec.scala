@@ -3,6 +3,7 @@
 package chiselTests
 
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.util._
 import chisel3.testers.BasicTester
 import chisel3.experimental.{Analog, attach, BaseModule}
@@ -19,13 +20,20 @@ class AnalogWriterIO extends Bundle {
 }
 
 trait AnalogReader {
-  self: BaseModule =>
-  final val io = self.IO(new AnalogReaderIO)
+  def out: UInt
+  def bus: Analog
 }
 
-class AnalogReaderBlackBox extends BlackBox with AnalogReader
+class AnalogReaderBlackBox extends BlackBox with AnalogReader {
+  val io = IO(new AnalogReaderIO)
+  def out = io.out
+  def bus = io.bus
+}
 
 class AnalogReaderWrapper extends Module with AnalogReader {
+  val io = IO(new AnalogReaderIO)
+  def out = io.out
+  def bus = io.bus
   val mod = Module(new AnalogReaderBlackBox)
   io <> mod.io
 }
@@ -41,6 +49,26 @@ class AnalogConnector extends Module {
   io.bus1 <> io.bus2
 }
 
+class VecAnalogReaderWrapper extends RawModule with AnalogReader {
+  val vecbus = IO(Vec(1, Analog(32.W)))
+  val out = IO(Output(UInt(32.W)))
+  val mod = Module(new AnalogReaderBlackBox)
+  def bus = vecbus(0)
+  mod.io.bus <> bus
+  out := mod.io.out
+}
+
+class VecBundleAnalogReaderWrapper extends RawModule with AnalogReader {
+  val vecBunBus = IO(Vec(1, new Bundle {
+    val analog = Analog(32.W)
+  }))
+  def bus = vecBunBus(0).analog
+  val out = IO(Output(UInt(32.W)))
+  val mod = Module(new AnalogReaderBlackBox)
+  mod.io.bus <> bus
+  out := mod.io.out
+}
+
 // Parent class for tests connecing up AnalogReaders and AnalogWriters
 abstract class AnalogTester extends BasicTester {
   final val BusValue = "hdeadbeef".U
@@ -52,15 +80,15 @@ abstract class AnalogTester extends BasicTester {
   writer.io.in := BusValue
 
   final def check(reader: BaseModule with AnalogReader): Unit =
-    assert(reader.io.out === BusValue)
+    assert(reader.out === BusValue)
 }
 
-class AnalogSpec extends ChiselFlatSpec {
+class AnalogSpec extends ChiselFlatSpec with Utils {
   behavior of "Analog"
 
   it should "NOT be bindable to registers" in {
-    a [ChiselException] should be thrownBy {
-      elaborate { new Module {
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new Module {
         val io = IO(new Bundle {})
         val reg = Reg(Analog(32.W))
       }}
@@ -68,15 +96,15 @@ class AnalogSpec extends ChiselFlatSpec {
   }
 
   it should "NOT be bindable to a direction" in {
-    a [ChiselException] should be thrownBy {
-      elaborate { new Module {
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new Module {
         val io = IO(new Bundle {
           val a = Input(Analog(32.W))
         })
       }}
     }
-    a [ChiselException] should be thrownBy {
-      elaborate { new Module {
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new Module {
         val io = IO(new Bundle {
           val a = Output(Analog(32.W))
         })
@@ -85,7 +113,7 @@ class AnalogSpec extends ChiselFlatSpec {
   }
 
   it should "be flippable" in {
-    elaborate { new Module {
+    ChiselStage.elaborate { new Module {
       val io = IO(new Bundle {
         val a = Flipped(Analog(32.W))
       })
@@ -95,8 +123,8 @@ class AnalogSpec extends ChiselFlatSpec {
   // There is no binding on the type of a memory
   // Should this be an error?
   ignore should "NOT be a legal type for Mem" in {
-    a [ChiselException] should be thrownBy {
-      elaborate { new Module {
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new Module {
         val io = IO(new Bundle {})
         val mem = Mem(16, Analog(32.W))
       }}
@@ -104,8 +132,8 @@ class AnalogSpec extends ChiselFlatSpec {
   }
 
   it should "NOT be bindable to Mem ports" in {
-    a [ChiselException] should be thrownBy {
-      elaborate { new Module {
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new Module {
         val io = IO(new Bundle {})
         val mem = Mem(16, Analog(32.W))
         val port = mem(5.U)
@@ -118,7 +146,7 @@ class AnalogSpec extends ChiselFlatSpec {
   it should "NOT be connectable to UInts" in {
     a [Exception] should be thrownBy {
       runTester { new BasicTester {
-        val uint = WireInit(0.U(32.W))
+        val uint = WireDefault(0.U(32.W))
         val sint = Wire(Analog(32.W))
         sint := uint
       }}
@@ -134,14 +162,58 @@ class AnalogSpec extends ChiselFlatSpec {
   }
 
   it should "error if any bulk connected more than once" in {
-    a [ChiselException] should be thrownBy {
-      elaborate(new Module {
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate(new Module {
         val io = IO(new Bundle {})
         val wires = List.fill(3)(Wire(Analog(32.W)))
         wires(0) <> wires(1)
         wires(0) <> wires(2)
       })
     }
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate(new Module {
+        val io = IO(new Bundle {})
+        val wires = List.fill(2)(Wire(Analog(32.W)))
+        wires(0) <> DontCare
+        wires(0) <> wires(1)
+      })
+    }
+  }
+
+  it should "allow DontCare connection" in {
+    ChiselStage.elaborate(new Module {
+      val io = IO(new Bundle {
+        val a = Analog(1.W)
+      })
+      io.a := DontCare
+    })
+    ChiselStage.elaborate(new Module {
+      val io = IO(new Bundle {
+        val a = Analog(1.W)
+      })
+      io.a <> DontCare
+    })
+  }
+
+  it should "work in bidirectional Aggregate wires" in {
+    class MyBundle extends Bundle {
+      val x = Input(UInt(8.W))
+      val y = Analog(8.W)
+    }
+    ChiselStage.elaborate(new Module {
+      val io = IO(new Bundle {
+        val a = new MyBundle
+      })
+      val w = Wire(new MyBundle)
+      w <> io.a
+    })
+    ChiselStage.elaborate(new Module {
+      val io = IO(new Bundle {
+        val a = Vec(1, new MyBundle)
+      })
+      val w = Wire(Vec(1, new MyBundle))
+      w <> io.a
+    })
   }
 
   it should "work with 3 blackboxes attached" in {
@@ -180,7 +252,7 @@ class AnalogSpec extends ChiselFlatSpec {
     assertTesterPasses(new AnalogTester {
       val mods = Seq(Module(new AnalogReaderBlackBox), Module(new AnalogReaderWrapper))
       val busWire = Wire(writer.io.bus.cloneType)
-      attach(writer.io.bus, mods(0).io.bus, mods(1).io.bus)
+      attach(writer.io.bus, mods(0).bus, mods(1).bus)
       mods.foreach(check(_))
     }, Seq("/chisel3/AnalogBlackBox.v"))
   }
@@ -207,5 +279,20 @@ class AnalogSpec extends ChiselFlatSpec {
       }, Seq("/chisel3/AnalogBlackBox.v"))
     }
   }
-}
 
+  it should "work with Vecs of Analog" in {
+    assertTesterPasses(new AnalogTester {
+      val mod = Module(new VecAnalogReaderWrapper)
+      mod.bus <> writer.io.bus
+      check(mod)
+    }, Seq("/chisel3/AnalogBlackBox.v"))
+  }
+
+  it should "work with Vecs of Bundles of Analog" in {
+    assertTesterPasses(new AnalogTester {
+      val mod = Module(new VecBundleAnalogReaderWrapper)
+      mod.bus <> writer.io.bus
+      check(mod)
+    }, Seq("/chisel3/AnalogBlackBox.v"))
+  }
+}

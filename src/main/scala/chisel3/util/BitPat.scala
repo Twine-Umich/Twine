@@ -4,9 +4,9 @@ package chisel3.util
 
 import scala.language.experimental.macros
 import chisel3._
-import chisel3.core.CompileOptions
 import chisel3.internal.chiselRuntimeDeprecated
 import chisel3.internal.sourceinfo.{SourceInfo, SourceInfoTransform}
+
 
 object BitPat {
   /** Parses a bit pattern string into (bits, mask, width).
@@ -14,7 +14,7 @@ object BitPat {
     * @return bits the literal value, with don't cares being 0
     * @return mask the mask bits, with don't cares being 0 and cares being 1
     * @return width the number of bits in the literal, including values and
-    * don't cares.
+    * don't cares, but not including the white space and underscores
     */
   private def parse(x: String): (BigInt, BigInt, Int) = {
     // Notes:
@@ -25,14 +25,17 @@ object BitPat {
     require(x.head == 'b', "BitPats must be in binary and be prefixed with 'b'")
     var bits = BigInt(0)
     var mask = BigInt(0)
+    var count = 0
     for (d <- x.tail) {
-      if (d != '_') {
+      if (! (d == '_' || d.isWhitespace)) {
         require("01?".contains(d), "Literal: " + x + " contains illegal character: " + d)
         mask = (mask << 1) + (if (d == '?') 0 else 1)
         bits = (bits << 1) + (if (d == '1') 1 else 0)
+        count += 1
       }
     }
-    (bits, mask, x.length - 1)
+
+    (bits, mask, count)
   }
 
   /** Creates a [[BitPat]] literal from a string.
@@ -54,10 +57,6 @@ object BitPat {
     */
   def dontCare(width: Int): BitPat = BitPat("b" + ("?" * width))
 
-  @chiselRuntimeDeprecated
-  @deprecated("Use BitPat.dontCare", "chisel3")
-  def DC(width: Int): BitPat = dontCare(width)  // scalastyle:ignore method.name
-
   /** Allows BitPats to be used where a UInt is expected.
     *
     * @note the BitPat must not have don't care bits (will error out otherwise)
@@ -74,9 +73,30 @@ object BitPat {
     * @note the UInt must be a literal
     */
   def apply(x: UInt): BitPat = {
-    require(x.isLit)
     val len = if (x.isWidthKnown) x.getWidth else 0
     apply("b" + x.litValue.toString(2).reverse.padTo(len, "0").reverse.mkString)
+  }
+
+  implicit class fromUIntToBitPatComparable(x: UInt) extends SourceInfoDoc {
+    import internal.sourceinfo.{SourceInfo, SourceInfoTransform}
+
+    import scala.language.experimental.macros
+
+    final def === (that: BitPat): Bool = macro SourceInfoTransform.thatArg
+    final def =/= (that: BitPat): Bool = macro SourceInfoTransform.thatArg
+
+    /** @group SourceInfoTransformMacro */
+    def do_=== (that: BitPat)  // scalastyle:ignore method.name
+               (implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = that === x
+    /** @group SourceInfoTransformMacro */
+    def do_=/= (that: BitPat)  // scalastyle:ignore method.name
+               (implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = that =/= x
+
+    final def != (that: BitPat): Bool = macro SourceInfoTransform.thatArg
+    @chiselRuntimeDeprecated
+    @deprecated("Use '=/=', which avoids potential precedence problems", "3.0")
+    def do_!= (that: BitPat)  // scalastyle:ignore method.name
+              (implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = that != x
   }
 }
 
@@ -89,23 +109,25 @@ object BitPat {
   * "b10001".U === BitPat("b101??") // evaluates to false.B
   * }}}
   */
-sealed class BitPat(val value: BigInt, val mask: BigInt, width: Int) {
+sealed class BitPat(val value: BigInt, val mask: BigInt, width: Int) extends SourceInfoDoc {
   def getWidth: Int = width
   def === (that: UInt): Bool = macro SourceInfoTransform.thatArg
   def =/= (that: UInt): Bool = macro SourceInfoTransform.thatArg
-  
+
+  /** @group SourceInfoTransformMacro */
   def do_=== (that: UInt)  // scalastyle:ignore method.name
       (implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
     value.asUInt === (that & mask.asUInt)
   }
+  /** @group SourceInfoTransformMacro */
   def do_=/= (that: UInt)  // scalastyle:ignore method.name
       (implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
     !(this === that)
   }
-  
+
   def != (that: UInt): Bool = macro SourceInfoTransform.thatArg
   @chiselRuntimeDeprecated
-  @deprecated("Use '=/=', which avoids potential precedence problems", "chisel3")
+  @deprecated("Use '=/=', which avoids potential precedence problems", "3.0")
   def do_!= (that: UInt)  // scalastyle:ignore method.name
       (implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
     this =/= that

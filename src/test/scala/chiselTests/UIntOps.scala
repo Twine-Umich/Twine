@@ -4,8 +4,10 @@ package chiselTests
 
 import chisel3._
 import org.scalatest._
+import chisel3.stage.ChiselStage
 import chisel3.testers.BasicTester
 import org.scalacheck.Shrink
+import org.scalatest.matchers.should.Matchers
 
 class UIntOps extends Module {
   val io = IO(new Bundle {
@@ -80,7 +82,7 @@ class GoodBoolConversion extends Module {
     val u = Input(UInt(1.W))
     val b = Output(Bool())
   })
-  io.b := io.u.toBool
+  io.b := io.u.asBool
 }
 
 class BadBoolConversion extends Module {
@@ -88,7 +90,7 @@ class BadBoolConversion extends Module {
     val u = Input(UInt(5.W))
     val b = Output(Bool())
   })
-  io.b := io.u.toBool
+  io.b := io.u.asBool
 }
 
 class NegativeShift(t: => Bits) extends Module {
@@ -96,21 +98,36 @@ class NegativeShift(t: => Bits) extends Module {
   Reg(t) >> -1
 }
 
-class UIntOpsSpec extends ChiselPropSpec with Matchers {
+class UIntLitExtractTester extends BasicTester {
+  assert("b101010".U(2) === false.B)
+  assert("b101010".U(3) === true.B)
+  assert("b101010".U(100) === false.B)
+  assert("b101010".U(3, 0) === "b1010".U)
+  assert("b101010".U(9, 0) === "b0000101010".U)
+
+  assert("b101010".U(6.W)(2) === false.B)
+  assert("b101010".U(6.W)(3) === true.B)
+  assert("b101010".U(6.W)(100) === false.B)
+  assert("b101010".U(6.W)(3, 0) === "b1010".U)
+  assert("b101010".U(6.W)(9, 0) === "b0000101010".U)
+  stop()
+}
+
+class UIntOpsSpec extends ChiselPropSpec with Matchers with Utils {
   // Disable shrinking on error.
   implicit val noShrinkListVal = Shrink[List[Int]](_ => Stream.empty)
   implicit val noShrinkInt = Shrink[Int](_ => Stream.empty)
 
   property("Bools can be created from 1 bit UInts") {
-    elaborate(new GoodBoolConversion)
+    ChiselStage.elaborate(new GoodBoolConversion)
   }
 
   property("Bools cannot be created from >1 bit UInts") {
-    a [Exception] should be thrownBy { elaborate(new BadBoolConversion) }
+    a [Exception] should be thrownBy extractCause[Exception] { ChiselStage.elaborate(new BadBoolConversion) }
   }
 
   property("UIntOps should elaborate") {
-    elaborate { new UIntOps }
+    ChiselStage.elaborate { new UIntOps }
   }
 
   property("UIntOpsTester should return the correct result") {
@@ -118,7 +135,22 @@ class UIntOpsSpec extends ChiselPropSpec with Matchers {
   }
 
   property("Negative shift amounts are invalid") {
-    a [ChiselException] should be thrownBy { elaborate(new NegativeShift(UInt())) }
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate(new NegativeShift(UInt()))
+    }
+  }
+
+  property("Bit extraction on literals should work for all non-negative indices") {
+    assertTesterPasses(new UIntLitExtractTester)
+  }
+
+  property("asBools should support chained apply") {
+    ChiselStage.elaborate(new Module {
+      val io = IO(new Bundle {
+        val in = Input(UInt(8.W))
+        val out = Output(Bool())
+      })
+      io.out := io.in.asBools()(2)
+    })
   }
 }
-

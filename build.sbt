@@ -2,8 +2,6 @@
 
 enablePlugins(SiteScaladocPlugin)
 
-enablePlugins(GhpagesPlugin)
-
 def scalacOptionsVersion(scalaVersion: String): Seq[String] = {
   Seq() ++ {
     // If we're building with Scala > 2.11, enable the compile option
@@ -30,33 +28,36 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
   }
 }
 
-val defaultVersions = Map("firrtl" -> "1.1.7")
+val defaultVersions = Seq(
+  "edu.berkeley.cs" %% "firrtl" % "1.4-SNAPSHOT"
+)
 
 lazy val commonSettings = Seq (
-  organization := "edu.berkeley.cs",
-  version := "3.1.8",
-  git.remoteRepo := "git@github.com:freechipsproject/chisel3.git",
-  autoAPIMappings := true,
-  scalaVersion := "2.11.12",
-  crossScalaVersions := Seq("2.11.12", "2.12.4"),
   resolvers ++= Seq(
     Resolver.sonatypeRepo("snapshots"),
     Resolver.sonatypeRepo("releases")
   ),
+  organization := "edu.umich.engin.eecs",
+  version := "0.1-SNAPSHOT",
+  autoAPIMappings := true,
+  scalaVersion := "2.12.11",
+  crossScalaVersions := Seq("2.12.11", "2.11.12"),
   scalacOptions := Seq("-deprecation", "-feature") ++ scalacOptionsVersion(scalaVersion.value),
   libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full),
+  (scalastyleConfig in Test) := (baseDirectory in root).value / "scalastyle-test-config.xml",
   // Use the root project's unmanaged base for all sub-projects.
   unmanagedBase := (unmanagedBase in root).value,
   // Since we want to examine the classpath to determine if a dependency on firrtl is required,
   //  this has to be a Task setting.
   //  Fortunately, allDependencies is a Task Setting, so we can modify that.
   allDependencies := {
-    allDependencies.value ++ Seq("firrtl").collect {
+    allDependencies.value ++ defaultVersions.collect {
       // If we have an unmanaged jar file on the classpath, assume we're to use that,
-      case dep: String if !(unmanagedClasspath in Compile).value.toString.contains(s"$dep.jar") =>
-        //  otherwise let sbt fetch the appropriate version.
-        "edu.berkeley.cs" %% dep % sys.props.getOrElse(dep + "Version", defaultVersions(dep))
+      case m: ModuleID if !(unmanagedClasspath in Compile).value.toString.contains(s"${m.name}.jar") =>
+        //  otherwise let sbt fetch the appropriate artifact, possibly with a specific revision.
+        val mWithRevision = m.withRevision(sys.props.getOrElse(m.name + "Version", m.revision))
+        mWithRevision
     }
   }
 )
@@ -97,26 +98,50 @@ lazy val publishSettings = Seq (
 lazy val chiselSettings = Seq (
   name := "chisel3",
 
+// sbt 1.2.6 fails with `Symbol 'term org.junit' is missing from the classpath`
+// when compiling tests under 2.11.12
+// An explicit dependency on junit seems to alleviate this.
   libraryDependencies ++= Seq(
-    "org.scalatest" %% "scalatest" % "3.0.1" % "test",
-    "org.scalacheck" %% "scalacheck" % "1.13.4" % "test",
-    "com.github.scopt" %% "scopt" % "3.7.0"
+    "junit" % "junit" % "4.13" % "test",
+    "org.scalatest" %% "scalatest" % "3.1.2" % "test",
+    "org.scalatestplus" %% "scalacheck-1-14" % "3.1.1.1" % "test",
+    "com.github.scopt" %% "scopt" % "3.7.1"
   ),
-
-  // Tests from other projects may still run concurrently.
-  parallelExecution in Test := true,
-
   javacOptions ++= javacOptionsVersion(scalaVersion.value)
+) ++ (
+  // Tests from other projects may still run concurrently
+  //  if we're not running with -DminimalResources.
+  // Another option would be to experiment with:
+  //  concurrentRestrictions in Global += Tags.limit(Tags.Test, 1),
+  sys.props.contains("minimalResources") match {
+    case true  => Seq( Test / parallelExecution := false )
+    case false => Seq( fork := true,
+                       Test / testForkedParallel := true )
+  }
 )
 
-lazy val coreMacros = (project in file("coreMacros")).
+lazy val macros = (project in file("macros")).
+  settings(name := "chisel3-macros").
   settings(commonSettings: _*).
-  settings(publishArtifact := false)
+  settings(publishSettings: _*)
 
-lazy val chiselFrontend = (project in file("chiselFrontend")).
+lazy val core = (project in file("core")).
   settings(commonSettings: _*).
-  settings(publishArtifact := false).
-  dependsOn(coreMacros)
+  settings(publishSettings: _*).
+  settings(
+    name := "chisel3-core",
+    scalacOptions := scalacOptions.value ++ Seq(
+      "-deprecation",
+      "-explaintypes",
+      "-feature",
+      "-language:reflectiveCalls",
+      "-unchecked",
+      "-Xcheckinit",
+      "-Xlint:infer-any"
+//      , "-Xlint:missing-interpolator"
+    )
+  ).
+  dependsOn(macros)
 
 // This will always be the root project, even if we are a sub-project.
 lazy val root = RootProject(file("."))
@@ -133,35 +158,33 @@ lazy val chisel = (project in file(".")).
   settings(commonSettings: _*).
   settings(chiselSettings: _*).
   settings(publishSettings: _*).
-  // Prevent separate JARs from being generated for coreMacros and chiselFrontend.
-  dependsOn(coreMacros % "compile-internal;test-internal").
-  dependsOn(chiselFrontend % "compile-internal;test-internal").
+  dependsOn(macros).
+  dependsOn(core).
+  aggregate(macros, core).
   settings(
     scalacOptions in Test ++= Seq("-language:reflectiveCalls"),
     scalacOptions in Compile in doc ++= Seq(
       "-diagrams",
+      "-groups",
+      "-skip-packages", "chisel3.internal",
       "-diagrams-max-classes", "25",
       "-doc-version", version.value,
       "-doc-title", name.value,
-      "-doc-root-content", baseDirectory.value+"/root-doc.txt"
-    ),
-    // Disable aggregation in general, but enable it for specific tasks.
-    // Otherwise we get separate Jar files for each subproject and we
-    //  go to great pains to package all chisel3 core code in a single Jar.
-    // If you get errors indicating coverageReport is undefined, be sure
-    //  you have sbt-scoverage in project/plugins.sbt
-    aggregate := false,
-    aggregate in coverageReport := true,
-    // Include macro classes, resources, and sources main JAR.
-    mappings in (Compile, packageBin) ++= (mappings in (coreMacros, Compile, packageBin)).value,
-    mappings in (Compile, packageSrc) ++= (mappings in (coreMacros, Compile, packageSrc)).value,
-    mappings in (Compile, packageBin) ++= (mappings in (chiselFrontend, Compile, packageBin)).value,
-    mappings in (Compile, packageSrc) ++= (mappings in (chiselFrontend, Compile, packageSrc)).value,
-    // Export the packaged JAR so projects that depend directly on Chisel project (rather than the
-    // published artifact) also see the stuff in coreMacros and chiselFrontend.
-    exportJars := true
+      "-doc-root-content", baseDirectory.value+"/root-doc.txt",
+      "-sourcepath", (baseDirectory in ThisBuild).value.toString,
+      "-doc-source-url",
+      {
+        val branch =
+          if (version.value.endsWith("-SNAPSHOT")) {
+            "master"
+          } else {
+            s"v${version.value}"
+          }
+        s"https://github.com/freechipsproject/chisel3/tree/$branch/€{FILE_PATH}.scala"
+      }
+    )
   )
-// We need the following for the release version that uses sbt to invoke firrtl.
-// sbt doesn't deal well with multiple simulataneous invocations for the same user
 
-  parallelExecution in Test := false
+addCommandAlias("com", "all compile")
+addCommandAlias("lint", "; compile:scalafix --check ; test:scalafix --check")
+addCommandAlias("fix", "all compile:scalafix test:scalafix")

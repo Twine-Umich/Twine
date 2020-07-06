@@ -3,8 +3,7 @@
 package chiselTests
 
 import chisel3._
-import chisel3.experimental.dontTouch
-import firrtl.{FirrtlExecutionSuccess, Transform}
+import chisel3.stage.ChiselStage
 
 class HasDeadCodeChild(withDontTouch: Boolean) extends Module {
   val io = IO(new Bundle {
@@ -27,13 +26,13 @@ class HasDeadCode(withDontTouch: Boolean) extends Module {
   val inst = Module(new HasDeadCodeChild(withDontTouch))
   inst.io.a := io.a
   io.b := inst.io.b
-  val dead = WireInit(io.a + 1.U)
+  val dead = WireDefault(io.a + 1.U)
   if (withDontTouch) {
     dontTouch(dead)
   }
 }
 
-class DontTouchSpec extends ChiselFlatSpec {
+class DontTouchSpec extends ChiselFlatSpec with Utils{
   val deadSignals = List(
     "io_c_0",
     "io_c_1",
@@ -52,12 +51,11 @@ class DontTouchSpec extends ChiselFlatSpec {
     }
   }
   "Dont touch" should "only work on bound hardware" in {
-    a [chisel3.core.Binding.BindingException] should be thrownBy {
-      compile(new Module {
+    a [chisel3.BindingException] should be thrownBy extractCause[BindingException] {
+      ChiselStage.elaborate(new Module {
         val io = IO(new Bundle { })
         dontTouch(new Bundle { val a = UInt(32.W) } )
       })
     }
   }
 }
-

@@ -3,8 +3,6 @@
 package chiselTests
 
 import chisel3._
-import org.scalatest._
-import org.scalatest.prop._
 import chisel3.testers.BasicTester
 
 class BitwiseOpsTester(w: Int, _a: Int, _b: Int) extends BasicTester {
@@ -15,6 +13,8 @@ class BitwiseOpsTester(w: Int, _a: Int, _b: Int) extends BasicTester {
   assert((a & b) === (_a & _b).asUInt)
   assert((a | b) === (_a | _b).asUInt)
   assert((a ^ b) === (_a ^ _b).asUInt)
+  assert((a.orR) === (_a != 0).asBool)
+  assert((a.andR) === (s"%${w}s".format(BigInt(_a).toString(2)).foldLeft(true)(_ && _ == '1') ).asBool)
   stop()
 }
 

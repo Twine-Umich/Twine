@@ -12,6 +12,10 @@ import scala.language.implicitConversions
 object ImplicitConversions {
   // The explicit fromIntToLiteral resolves an ambiguous conversion between fromIntToLiteral and
   // UInt.asUInt.
+<<<<<<< HEAD
   implicit def intToUInt(x: Int): UInt = chisel3.core.fromIntToLiteral(x).asUInt
+=======
+  implicit def intToUInt(x: Int): UInt = chisel3.fromIntToLiteral(x).asUInt
+>>>>>>> alpha-7.1.2020
   implicit def booleanToBool(x: Boolean): Bool = x.B
 }

@@ -2,8 +2,8 @@
 
 package chiselTests
 
-import org.scalatest._
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.testers.BasicTester
 
 class OptionBundle(val hasIn: Boolean) extends Bundle {
@@ -44,7 +44,7 @@ class InvalidOptionBundleTester() extends BasicTester {
   stop()
 }
 
-class OptionBundleSpec extends ChiselFlatSpec {
+class OptionBundleSpec extends ChiselFlatSpec with Utils {
   "A Bundle with an Option field" should "work properly if the Option field is not None" in {
     assertTesterPasses { new SomeOptionBundleTester(true) }
     assertTesterPasses { new SomeOptionBundleTester(false) }
@@ -55,8 +55,8 @@ class OptionBundleSpec extends ChiselFlatSpec {
   }
 
   "A Bundle with an Option field" should "assert out accessing a None Option field" in {
-    a [Exception] should be thrownBy {
-      elaborate { new InvalidOptionBundleTester() }
+    a [Exception] should be thrownBy extractCause[Exception] {
+      ChiselStage.elaborate { new InvalidOptionBundleTester() }
     }
   }
 }

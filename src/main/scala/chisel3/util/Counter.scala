@@ -5,9 +5,12 @@ package chisel3.util
 import chisel3._
 import chisel3.internal.naming.chiselName  // can't use chisel3_ version because of compile order
 
-/** A counter module
+/** Used to generate an inline (logic directly in the containing Module, no internal Module is created)
+  * hardware counter.
   *
   * Typically instantiated with apply methods in [[Counter$ object Counter]]
+  *
+  * Does not create a new Chisel Module
   *
   * @example {{{
   *   val countOn = true.B // increment counter every clock cycle
@@ -22,16 +25,17 @@ import chisel3.internal.naming.chiselName  // can't use chisel3_ version because
   */
 @chiselName
 class Counter(val n: Int) {
-  require(n >= 0)
+  require(n >= 0, s"Counter value must be nonnegative, got: $n")
   val value = if (n > 1) RegInit(0.U(log2Ceil(n).W)) else 0.U
 
-  /** Increment the counter, returning whether the counter currently is at the
-    * maximum and will wrap. The incremented value is registered and will be
-    * visible on the next cycle.
+  /** Increment the counter
+    *
+    * @note The incremented value is registered and will be visible on the next clock cycle
+    * @return whether the counter will wrap to zero on the next cycle
     */
   def inc(): Bool = {
     if (n > 1) {
-      val wrap = value === (n-1).asUInt
+      val wrap = value === (n-1).U
       value := value + 1.U
       if (!isPow2(n)) {
         when (wrap) { value := 0.U }
@@ -59,8 +63,8 @@ object Counter
   @chiselName
   def apply(cond: Bool, n: Int): (UInt, Bool) = {
     val c = new Counter(n)
-    var wrap: Bool = null
-    when (cond) { wrap = c.inc() }
-    (c.value, cond && wrap)
+    val wrap = WireInit(false.B)
+    when (cond) { wrap := c.inc() }
+    (c.value, wrap)
   }
 }

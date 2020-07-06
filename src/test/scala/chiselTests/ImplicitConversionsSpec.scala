@@ -39,5 +39,15 @@ class ImplicitConversionsSpec extends ChiselFlatSpec {
     import chisel3.util._
     assertTypeError("Decoupled(UInt(8.W)).target")
   }
+<<<<<<< HEAD
 }
 
+=======
+
+  "X.B for X not in [0,1]" should "throw an exception, even outside hardware context" in {
+    a [ChiselException] should be thrownBy {
+      65.B
+    }
+  }
+}
+>>>>>>> alpha-7.1.2020

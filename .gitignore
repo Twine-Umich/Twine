@@ -1,8 +1,10 @@
+out/
 generated/
 /lib/firrtl.jar
 /bin/
 .classpath
 .idea
+.idea_modules/
 .project
 target/
 *.iml

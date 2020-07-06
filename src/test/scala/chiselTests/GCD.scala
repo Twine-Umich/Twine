@@ -3,9 +3,8 @@
 package chiselTests
 
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.testers.BasicTester
-import org.scalatest._
-import org.scalatest.prop._
 
 class GCD extends Module {
   val io = IO(new Bundle {
@@ -49,7 +48,7 @@ class GCDSpec extends ChiselPropSpec {
     ( 48,  64,  16))
 
   property("GCD should elaborate") {
-    elaborate { new GCD }
+    ChiselStage.elaborate { new GCD }
   }
 
   property("GCDTester should return the correct result") {

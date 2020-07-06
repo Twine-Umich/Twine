@@ -3,6 +3,7 @@
 package chiselTests
 
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.testers.BasicTester
 import chisel3.util.{Counter, Queue}
 import chisel3.experimental.{DataMirror, requireIsChiselType}
@@ -18,7 +19,7 @@ final class CustomBundle(elts: (String, Data)*) extends Record {
     field -> elt
   }: _*)
   def apply(elt: String): Data = elements(elt)
-  override def cloneType = {
+  override def cloneType: this.type = {
     val cloned = elts.map { case (n, d) => n -> DataMirror.internal.chiselTypeClone(d) }
     (new CustomBundle(cloned: _*)).asInstanceOf[this.type]
   }
@@ -28,11 +29,11 @@ trait RecordSpecUtils {
   class MyBundle extends Bundle {
     val foo = UInt(32.W)
     val bar = UInt(32.W)
-    override def cloneType = (new MyBundle).asInstanceOf[this.type]
+    override def cloneType: this.type = (new MyBundle).asInstanceOf[this.type]
   }
   // Useful for constructing types from CustomBundle
   // This is a def because each call to this needs to return a new instance
-  def fooBarType = new CustomBundle("foo" -> UInt(32.W), "bar" -> UInt(32.W))
+  def fooBarType: CustomBundle = new CustomBundle("foo" -> UInt(32.W), "bar" -> UInt(32.W))
 
   class MyModule(output: => Record, input: => Record) extends Module {
     val io = IO(new Bundle {
@@ -99,17 +100,25 @@ trait RecordSpecUtils {
     assert(wire("0").asUInt === 123.U)
     stop()
   }
+
+  class RecordTypeTester extends BasicTester {
+    val wire0 = Wire(new CustomBundle("0"-> UInt(32.W)))
+    val wire1 = Reg(new CustomBundle("0"-> UInt(32.W)))
+    val wire2 = Wire(new CustomBundle("1"-> UInt(32.W)))
+    require(DataMirror.checkTypeEquivalence(wire0, wire1))
+    require(!DataMirror.checkTypeEquivalence(wire1, wire2))
+  }
 }
 
-class RecordSpec extends ChiselFlatSpec with RecordSpecUtils {
+class RecordSpec extends ChiselFlatSpec with RecordSpecUtils with Utils {
   behavior of "Records"
 
   they should "bulk connect similarly to Bundles" in {
-    elaborate { new MyModule(fooBarType, fooBarType) }
+    ChiselStage.elaborate { new MyModule(fooBarType, fooBarType) }
   }
 
   they should "bulk connect to Bundles" in {
-    elaborate { new MyModule(new MyBundle, fooBarType) }
+    ChiselStage.elaborate { new MyModule(new MyBundle, fooBarType) }
   }
 
   they should "follow UInt serialization/deserialization API" in {
@@ -129,21 +138,25 @@ class RecordSpec extends ChiselFlatSpec with RecordSpecUtils {
   }
 
   "Bulk connect on Record" should "check that the fields match" in {
-    (the [ChiselException] thrownBy {
-      elaborate { new MyModule(fooBarType, new CustomBundle("bar" -> UInt(32.W))) }
+    (the [ChiselException] thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new MyModule(fooBarType, new CustomBundle("bar" -> UInt(32.W))) }
     }).getMessage should include ("Right Record missing field")
 
-    (the [ChiselException] thrownBy {
-      elaborate { new MyModule(new CustomBundle("bar" -> UInt(32.W)), fooBarType) }
+    (the [ChiselException] thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new MyModule(new CustomBundle("bar" -> UInt(32.W)), fooBarType) }
     }).getMessage should include ("Left Record missing field")
   }
 
   "CustomBundle" should "work like built-in aggregates" in {
-    elaborate(new Module {
+    ChiselStage.elaborate(new Module {
       val gen = new CustomBundle("foo" -> UInt(32.W))
       val io = IO(Output(gen))
       val wire = Wire(gen)
       io := wire
     })
+  }
+
+  "CustomBundle" should "check the types" in {
+    ChiselStage.elaborate { new RecordTypeTester }
   }
 }

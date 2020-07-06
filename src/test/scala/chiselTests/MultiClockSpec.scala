@@ -3,9 +3,9 @@
 package chiselTests
 
 import chisel3._
-import chisel3.experimental.{withClockAndReset, withClock, withReset}
 import chisel3.util.Counter
 import chisel3.testers.BasicTester
+import chisel3.stage.ChiselStage
 
 /** Multi-clock test of a Reg using a different clock via withClock */
 class ClockDividerTest extends BasicTester {
@@ -54,8 +54,8 @@ class MultiClockSubModuleTest extends BasicTester {
 
 /** Test withReset changing the reset of a Reg */
 class WithResetTest extends BasicTester {
-  val reset2 = WireInit(false.B)
-  val reg = withReset(reset2 || reset.toBool) { RegInit(0.U(8.W)) }
+  val reset2 = WireDefault(false.B)
+  val reg = withReset(reset2 || reset.asBool) { RegInit(0.U(8.W)) }
   reg := reg + 1.U
 
   val (cycle, done) = Counter(true.B, 10)
@@ -124,7 +124,7 @@ class MultiClockSpec extends ChiselFlatSpec {
   }
 
   it should "return like a normal Scala block" in {
-    elaborate(new BasicTester {
+    ChiselStage.elaborate(new BasicTester {
       assert(withClock(this.clock) { 5 } == 5)
     })
   }
@@ -138,13 +138,13 @@ class MultiClockSpec extends ChiselFlatSpec {
   }
 
   it should "return like a normal Scala block" in {
-    elaborate(new BasicTester {
+    ChiselStage.elaborate(new BasicTester {
       assert(withReset(this.reset) { 5 } == 5)
     })
   }
 
   "withClockAndReset" should "return like a normal Scala block" in {
-    elaborate(new BasicTester {
+    ChiselStage.elaborate(new BasicTester {
       assert(withClockAndReset(this.clock, this.reset) { 5 } == 5)
     })
   }

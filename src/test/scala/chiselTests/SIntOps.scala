@@ -3,6 +3,7 @@
 package chiselTests
 
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.testers.BasicTester
 
 class SIntOps extends Module {
@@ -83,15 +84,36 @@ class SIntOpsTester(c: SIntOps) extends Tester(c) {
 }
 */
 
-class SIntOpsSpec extends ChiselPropSpec {
+class SIntLitExtractTester extends BasicTester {
+  assert(-5.S(1) === true.B)
+  assert(-5.S(2) === false.B)
+  assert(-5.S(100) === true.B)
+  assert(-5.S(3, 0) === "b1011".U)
+  assert(-5.S(9, 0) === "b1111111011".U)
+  assert(-5.S(4.W)(1) === true.B)
+  assert(-5.S(4.W)(2) === false.B)
+  assert(-5.S(4.W)(100) === true.B)
+  assert(-5.S(4.W)(3, 0) === "b1011".U)
+  assert(-5.S(4.W)(9, 0) === "b1111111011".U)
+  stop()
+}
+
+class SIntOpsSpec extends ChiselPropSpec with Utils {
 
   property("SIntOps should elaborate") {
-    elaborate { new SIntOps }
+    ChiselStage.elaborate { new SIntOps }
   }
 
   property("Negative shift amounts are invalid") {
-    a [ChiselException] should be thrownBy { elaborate(new NegativeShift(SInt())) }
+    a [ChiselException] should be thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate(new NegativeShift(SInt()))
+    }
   }
 
   ignore("SIntOpsTester should return the correct result") { }
+
+  property("Bit extraction on literals should work for all non-negative indices") {
+    assertTesterPasses(new SIntLitExtractTester)
+  }
+
 }

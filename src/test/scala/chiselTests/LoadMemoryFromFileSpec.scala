@@ -5,13 +5,22 @@ package chiselTests
 import java.io.File
 
 import chisel3._
+<<<<<<< HEAD
+=======
+import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+>>>>>>> alpha-7.1.2020
 import chisel3.util.experimental.loadMemoryFromFile
 import chisel3.util.log2Ceil
 import firrtl.FirrtlExecutionSuccess
 import firrtl.annotations.MemoryLoadFileType
+<<<<<<< HEAD
 import firrtl.transforms.BlackBoxSourceHelper
 
 import org.scalatest.{FreeSpec, Matchers}
+=======
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
+>>>>>>> alpha-7.1.2020
 
 class UsesThreeMems(memoryDepth: Int, memoryType: Data) extends Module {
   val io = IO(new Bundle {
@@ -112,7 +121,11 @@ class HasComplexMemory(memoryDepth: Int) extends Module {
   * For more complete working examples
   * @see <a href="https://github.com/freechipsproject/chisel-testers">Chisel Testers</a> LoadMemoryFromFileSpec.scala
   */
+<<<<<<< HEAD
 class LoadMemoryFromFileSpec extends FreeSpec with Matchers {
+=======
+class LoadMemoryFromFileSpec extends AnyFreeSpec with Matchers {
+>>>>>>> alpha-7.1.2020
   def fileExistsWithMem(file: File, mem: Option[String] = None): Unit = {
     info(s"$file exists")
     file.exists() should be (true)
@@ -127,6 +140,7 @@ class LoadMemoryFromFileSpec extends FreeSpec with Matchers {
   "Users can specify a source file to load memory from" in {
     val testDirName = "test_run_dir/load_memory_spec"
 
+<<<<<<< HEAD
     val result = Driver.execute(
       args = Array("-X", "verilog", "--target-dir", testDirName),
       dut = () => new UsesMem(memoryDepth = 8, memoryType = UInt(16.W))    )
@@ -140,11 +154,24 @@ class LoadMemoryFromFileSpec extends FreeSpec with Matchers {
       case _=>
         throw new Exception("Failed compile")
     }
+=======
+    val result = (new ChiselStage).execute(
+      args = Array("-X", "verilog", "--target-dir", testDirName),
+      annotations = Seq(ChiselGeneratorAnnotation(() => new UsesMem(memoryDepth = 8, memoryType = UInt(16.W))))
+    )
+
+    val dir = new File(testDirName)
+    fileExistsWithMem(new File(dir, "UsesMem.UsesMem.memory.v"), Some("./mem1"))
+    fileExistsWithMem(new File(dir, "UsesMem.UsesMemLow.memory.v"), Some("./mem2"))
+    fileExistsWithMem(new File(dir, "firrtl_black_box_resource_files.f"))
+
+>>>>>>> alpha-7.1.2020
   }
 
   "Calling a module that loads memories from a file more than once should work" in {
     val testDirName = "test_run_dir/load_three_memory_spec"
 
+<<<<<<< HEAD
     val result = Driver.execute(
       args = Array("-X", "verilog", "--target-dir", testDirName),
       dut = () => new UsesThreeMems(memoryDepth = 8, memoryType = UInt(16.W))
@@ -160,10 +187,25 @@ class LoadMemoryFromFileSpec extends FreeSpec with Matchers {
       case _=>
         throw new Exception("Failed compile")
     }  }
+=======
+    val result = (new ChiselStage).execute(
+      args = Array("-X", "verilog", "--target-dir", testDirName),
+      annotations = Seq(ChiselGeneratorAnnotation(() => new UsesThreeMems(memoryDepth = 8, memoryType = UInt(16.W))))
+    )
+
+    val dir = new File(testDirName)
+    fileExistsWithMem( new File(dir, "UsesThreeMems.UsesThreeMems.memory1.v"), Some("./mem1"))
+    fileExistsWithMem( new File(dir, "UsesThreeMems.UsesThreeMems.memory2.v"), Some("./mem1"))
+    fileExistsWithMem( new File(dir, "UsesThreeMems.UsesThreeMems.memory3.v"), Some("./mem1"))
+    fileExistsWithMem( new File(dir, "firrtl_black_box_resource_files.f"))
+
+  }
+>>>>>>> alpha-7.1.2020
 
   "In this example the memory has a complex memory type containing a bundle" in {
     val complexTestDirName = "test_run_dir/complex_memory_load"
 
+<<<<<<< HEAD
     val result = Driver.execute(
       args = Array("-X", "verilog", "--target-dir", complexTestDirName),
       dut = () => new HasComplexMemory(memoryDepth = 8)
@@ -185,6 +227,24 @@ class LoadMemoryFromFileSpec extends FreeSpec with Matchers {
       case _=>
         fail(s"Failed compile")
     }
+=======
+    val result = (new ChiselStage).execute(
+      args = Array("-X", "verilog", "--target-dir", complexTestDirName),
+      annotations = Seq(ChiselGeneratorAnnotation(() => new HasComplexMemory(memoryDepth = 8)))
+    )
+
+    val dir = new File(complexTestDirName)
+    val memoryElements = Seq("a", "b", "c")
+
+    memoryElements.foreach { element =>
+      val file = new File(dir, s"HasComplexMemory.HasComplexMemory.memory_$element.v")
+      file.exists() should be (true)
+      val fileText = io.Source.fromFile(file).getLines().mkString("\n")
+      fileText should include (s"""$$readmemh("./mem_$element", HasComplexMemory.memory_$element);""")
+      file.delete()
+    }
+
+>>>>>>> alpha-7.1.2020
   }
 
 }

@@ -3,6 +3,7 @@
 package chiselTests
 
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.util._
 
 class Risc extends Module {
@@ -54,6 +55,7 @@ class Risc extends Module {
   }
 }
 
+// scalastyle:off regex
 /*
 class RiscTester(c: Risc) extends Tester(c) {
   def wr(addr: BigInt, data: BigInt)  = {
@@ -111,11 +113,12 @@ class RiscTester(c: Risc) extends Tester(c) {
   expect(c.io.out, 4)
 }
 */
+// scalastyle:on regex
 
 class RiscSpec extends ChiselPropSpec {
 
   property("Risc should elaborate") {
-    elaborate { new Risc }
+    ChiselStage.elaborate { new Risc }
   }
 
   ignore("RiscTester should return the correct result") { }

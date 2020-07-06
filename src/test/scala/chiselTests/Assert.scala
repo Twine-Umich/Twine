@@ -2,15 +2,15 @@
 
 package chiselTests
 
-import org.scalatest._
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.testers.BasicTester
 import chisel3.util._
 
 class FailingAssertTester() extends BasicTester {
   assert(false.B)
   // Wait to come out of reset
-  val (_, done) = Counter(!reset.toBool, 4)
+  val (_, done) = Counter(!reset.asBool, 4)
   when (done) {
     stop()
   }
@@ -19,7 +19,7 @@ class FailingAssertTester() extends BasicTester {
 class SucceedingAssertTester() extends BasicTester {
   assert(true.B)
   // Wait to come out of reset
-  val (_, done) = Counter(!reset.toBool, 4)
+  val (_, done) = Counter(!reset.asBool, 4)
   when (done) {
     stop()
   }
@@ -38,7 +38,7 @@ class PipelinedResetTester extends BasicTester {
 
   module.reset := RegNext(RegNext(RegNext(reset)))
 
-  val (_, done) = Counter(!reset.toBool, 4)
+  val (_, done) = Counter(!reset.asBool, 4)
   when (done) {
     stop()
   }
@@ -61,7 +61,7 @@ class BadUnescapedPercentAssertTester extends BasicTester {
   stop()
 }
 
-class AssertSpec extends ChiselFlatSpec {
+class AssertSpec extends ChiselFlatSpec with Utils {
   "A failing assertion" should "fail the testbench" in {
     assert(!runTester{ new FailingAssertTester })
   }
@@ -79,7 +79,9 @@ class AssertSpec extends ChiselFlatSpec {
   }
   they should "not allow unescaped % in the message" in {
     a [java.util.UnknownFormatConversionException] should be thrownBy {
-      elaborate { new BadUnescapedPercentAssertTester }
+      extractCause[java.util.UnknownFormatConversionException] {
+        ChiselStage.elaborate { new BadUnescapedPercentAssertTester }
+      }
     }
   }
 }

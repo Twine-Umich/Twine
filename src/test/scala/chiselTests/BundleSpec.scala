@@ -3,27 +3,36 @@
 package chiselTests
 
 import chisel3._
+<<<<<<< HEAD
 import chisel3.core.IgnoreSeqInBundle
+=======
+import chisel3.stage.ChiselStage
+>>>>>>> alpha-7.1.2020
 import chisel3.testers.BasicTester
 
 trait BundleSpecUtils {
   class BundleFooBar extends Bundle {
     val foo = UInt(16.W)
     val bar = UInt(16.W)
-    override def cloneType = (new BundleFooBar).asInstanceOf[this.type]
+    override def cloneType: this.type = (new BundleFooBar).asInstanceOf[this.type]
   }
   class BundleBarFoo extends Bundle {
     val bar = UInt(16.W)
     val foo = UInt(16.W)
-    override def cloneType = (new BundleBarFoo).asInstanceOf[this.type]
+    override def cloneType: this.type = (new BundleBarFoo).asInstanceOf[this.type]
   }
   class BundleFoo extends Bundle {
     val foo = UInt(16.W)
-    override def cloneType = (new BundleFoo).asInstanceOf[this.type]
+    override def cloneType: this.type = (new BundleFoo).asInstanceOf[this.type]
   }
   class BundleBar extends Bundle {
     val bar = UInt(16.W)
-    override def cloneType = (new BundleBar).asInstanceOf[this.type]
+    override def cloneType: this.type = (new BundleBar).asInstanceOf[this.type]
+  }
+
+  class BadSeqBundle extends Bundle {
+    val bar = Seq(UInt(16.W), UInt(8.W), UInt(4.W))
+    override def cloneType: this.type = (new BadSeqBundle).asInstanceOf[this.type]
   }
 
   class BadSeqBundle extends Bundle {
@@ -56,9 +65,9 @@ trait BundleSpecUtils {
   }
 }
 
-class BundleSpec extends ChiselFlatSpec with BundleSpecUtils {
+class BundleSpec extends ChiselFlatSpec with BundleSpecUtils with Utils {
   "Bundles with the same fields but in different orders" should "bulk connect" in {
-    elaborate { new MyModule(new BundleFooBar, new BundleBarFoo) }
+    ChiselStage.elaborate { new MyModule(new BundleFooBar, new BundleBarFoo) }
   }
 
   "Bundles" should "follow UInt serialization/deserialization API" in {
@@ -66,18 +75,23 @@ class BundleSpec extends ChiselFlatSpec with BundleSpecUtils {
   }
 
   "Bulk connect on Bundles" should "check that the fields match" in {
-    (the [ChiselException] thrownBy {
-      elaborate { new MyModule(new BundleFooBar, new BundleFoo) }
+    (the [ChiselException] thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new MyModule(new BundleFooBar, new BundleFoo) }
     }).getMessage should include ("Right Record missing field")
 
-    (the [ChiselException] thrownBy {
-      elaborate { new MyModule(new BundleFoo, new BundleFooBar) }
+    (the [ChiselException] thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new MyModule(new BundleFoo, new BundleFooBar) }
     }).getMessage should include ("Left Record missing field")
   }
 
   "Bundles" should "not be able to use Seq for constructing hardware" in {
+<<<<<<< HEAD
     (the[ChiselException] thrownBy {
       elaborate {
+=======
+    (the[ChiselException] thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate {
+>>>>>>> alpha-7.1.2020
         new Module {
           val io = IO(new Bundle {
             val b = new BadSeqBundle
@@ -115,4 +129,20 @@ class BundleSpec extends ChiselFlatSpec with BundleSpecUtils {
       }
     }
   }
+<<<<<<< HEAD
+=======
+
+  "Bundles" should "not have aliased fields" in {
+    (the[ChiselException] thrownBy extractCause[ChiselException] {
+      ChiselStage.elaborate { new Module {
+        val io = IO(Output(new Bundle {
+          val a = UInt(8.W)
+          val b = a
+        }))
+        io.a := 0.U
+        io.b := 1.U
+      } }
+    }).getMessage should include("aliased fields")
+  }
+>>>>>>> alpha-7.1.2020
 }

@@ -2,18 +2,18 @@
 
 package chisel3
 
-import chisel3.internal.firrtl.Emitter
-import chisel3.experimental.{RawModule, RunFirrtlTransform}
-
-import java.io._
-import net.jcazevedo.moultingyaml._
-
+import chisel3.internal.ErrorLog
 import internal.firrtl._
 import firrtl._
-import firrtl.annotations.{Annotation, JsonProtocol}
-import firrtl.util.{ BackendCompilationUtilities => FirrtlBackendCompilationUtilities }
+import firrtl.options.{Dependency, Phase, PhaseManager, StageError}
+import firrtl.options.phases.DeletedWrapper
+import firrtl.options.Viewer.view
+import firrtl.annotations.JsonProtocol
+import firrtl.util.{BackendCompilationUtilities => FirrtlBackendCompilationUtilities}
+import chisel3.stage.{ChiselExecutionResultView, ChiselGeneratorAnnotation, ChiselStage}
+import chisel3.stage.phases.DriverCompatibility
+import java.io._
 
-import _root_.firrtl.annotations.AnnotationYamlProtocol._
 
 /**
   * The Driver provides methods to invoke the chisel3 compiler and the firrtl compiler.
@@ -37,7 +37,6 @@ import _root_.firrtl.annotations.AnnotationYamlProtocol._
   *          chisel3.execute(args, () => new DUT)
   *          }}}
   */
-import BuildInfo._
 
 trait BackendCompilationUtilities extends FirrtlBackendCompilationUtilities {
   /** Compile Chirrtl to Verilog by invoking Firrtl inside the same JVM
@@ -62,6 +61,7 @@ trait BackendCompilationUtilities extends FirrtlBackendCompilationUtilities {
 /**
   * This family provides return values from the chisel3 and possibly firrtl compile steps
   */
+@deprecated("This will be removed in Chisel 3.5", "Chisel3 3.4")
 trait ChiselExecutionResult
 
 /**
@@ -70,6 +70,7 @@ trait ChiselExecutionResult
   * @param emitted            The emitted Chirrrl text
   * @param firrtlResultOption Optional Firrtl result, @see freechipsproject/firrtl for details
   */
+@deprecated("This will be removed in Chisel 3.5", "Chisel 3.4")
 case class ChiselExecutionSuccess(
                                   circuitOption: Option[Circuit],
                                   emitted: String,
@@ -81,26 +82,53 @@ case class ChiselExecutionSuccess(
   *
   * @param message A clue might be provided here.
   */
+@deprecated("This will be removed in Chisel 3.5", "Chisel 3.4")
 case class ChiselExecutionFailure(message: String) extends ChiselExecutionResult
 
+@deprecated("Please switch to chisel3.stage.ChiselStage. Driver will be removed in 3.4.", "3.2.4")
 object Driver extends BackendCompilationUtilities {
 
-  /** Elaborates the Module specified in the gen function into a Circuit
+  /**
+    * Elaborate the Module specified in the gen function into a Chisel IR Circuit.
     *
-    *  @param gen a function that creates a Module hierarchy
-    *  @return the resulting Chisel IR in the form of a Circuit (TODO: Should be FIRRTL IR)
+    * @param gen A function that creates a Module hierarchy.
+    * @return The resulting Chisel IR in the form of a Circuit. (TODO: Should be FIRRTL IR)
     */
-  def elaborate[T <: RawModule](gen: () => T): Circuit = internal.Builder.build(Module(gen()))
+  @deprecated("Use ChiselStage.elaborate or use a ChiselStage class. This will be removed in 3.4.", "3.2.4")
+  def elaborate[T <: RawModule](gen: () => T): Circuit = internal.Builder.build(Module(gen()))._1
 
-  def emit[T <: RawModule](gen: () => T): String = Emitter.emit(elaborate(gen))
+  /**
+    * Convert the given Chisel IR Circuit to a FIRRTL Circuit.
+    *
+    * @param ir Chisel IR Circuit, generated e.g. by elaborate().
+    */
+  @deprecated("Use ChiselStage.convert or use a ChiselStage class. This will be removed in 3.4.", "3.2.4")
+  def toFirrtl(ir: Circuit): firrtl.ir.Circuit = Converter.convert(ir)
 
+  /**
+    * Emit the Module specified in the gen function directly as a FIRRTL string without
+    * invoking FIRRTL.
+    *
+    * @param gen A function that creates a Module hierarchy.
+    */
+  @deprecated("Use (new chisel3.stage.ChiselStage).emitChirrtl. This will be removed in 3.4.", "3.2.2")
+  def emit[T <: RawModule](gen: () => T): String = Driver.emit(elaborate(gen))
+
+  /**
+    * Emit the given Chisel IR Circuit as a FIRRTL string, without invoking FIRRTL.
+    *
+    * @param ir Chisel IR Circuit, generated e.g. by elaborate().
+    */
+  @deprecated("Use (new chisel3.stage.ChiselStage).emitChirrtl", "3.2.2")
   def emit[T <: RawModule](ir: Circuit): String = Emitter.emit(ir)
 
-  /** Elaborates the Module specified in the gen function into Verilog
+  /**
+    * Elaborate the Module specified in the gen function into Verilog.
     *
-    *  @param gen a function that creates a Module hierarchy
-    *  @return the resulting String containing the design in Verilog
+    * @param gen A function that creates a Module hierarchy.
+    * @return A String containing the design in Verilog.
     */
+  @deprecated("Use (new chisel3.stage.ChiselStage).emitVerilog. This will be removed in 3.4.", "3.2.2")
   def emitVerilog[T <: RawModule](gen: => T): String = {
     execute(Array[String](), { () => gen }) match {
       case ChiselExecutionSuccess(_, _, Some(firrtl.FirrtlExecutionSuccess(_, verilog))) => verilog
@@ -108,15 +136,62 @@ object Driver extends BackendCompilationUtilities {
     }
   }
 
+  /**
+    * Dump the elaborated Chisel IR Circuit as a FIRRTL String, without invoking FIRRTL.
+    *
+    * If no File is given as input, it will dump to a default filename based on the name of the
+    * top Module.
+    *
+    * @param c Elaborated Chisel Circuit.
+    * @param optName File to dump to. If unspecified, defaults to "<topmodule>.fir".
+    * @return The File the circuit was dumped to.
+    */
+  @deprecated("Migrate to chisel3.stage.ChiselStage. This will be removed in 3.4.", "3.2.4")
   def dumpFirrtl(ir: Circuit, optName: Option[File]): File = {
     val f = optName.getOrElse(new File(ir.name + ".fir"))
     val w = new FileWriter(f)
-    w.write(Emitter.emit(ir))
+    w.write(Driver.emit(ir))
     w.close()
     f
   }
 
+  /**
+    * Emit the annotations of a circuit
+    *
+    * @param ir The circuit containing annotations to be emitted
+    * @param optName An optional filename (will use s"\${ir.name}.json" otherwise)
+    */
+  @deprecated("Migrate to chisel3.stage.ChiselStage. This will be removed in 3.4.", "3.2.4")
+  def dumpAnnotations(ir: Circuit, optName: Option[File]): File = {
+    val f = optName.getOrElse(new File(ir.name + ".anno.json"))
+    val w = new FileWriter(f)
+    w.write(JsonProtocol.serialize(ir.annotations.map(_.toFirrtl)))
+    w.close()
+    f
+  }
+
+  /**
+    * Dump the elaborated Circuit to ProtoBuf.
+    *
+    * If no File is given as input, it will dump to a default filename based on the name of the
+    * top Module.
+    *
+    * @param c Elaborated Chisel Circuit.
+    * @param optFile Optional File to dump to. If unspecified, defaults to "<topmodule>.pb".
+    * @return The File the circuit was dumped to.
+    */
+  @deprecated("Migrate to chisel3.stage.ChiselStage. This will be removed in 3.4.", "3.2.4")
+  def dumpProto(c: Circuit, optFile: Option[File]): File = {
+    val f = optFile.getOrElse(new File(c.name + ".pb"))
+    val ostream = new java.io.FileOutputStream(f)
+    // Lazily convert modules to make intermediate objects garbage collectable
+    val modules = c.components.map(m => () => Converter.convert(m))
+    firrtl.proto.ToProto.writeToStreamFast(ostream, ir.NoInfo, modules, c.name)
+    f
+  }
+
   private var target_dir: Option[String] = None
+  @deprecated("Use chisel3.stage.ChiselStage with '--target-directory'. This will be removed in 3.4.", "3.2.2")
   def parseArgs(args: Array[String]): Unit = {
     for (i <- 0 until args.size) {
       if (args(i) == "--targetDir") {
@@ -125,66 +200,53 @@ object Driver extends BackendCompilationUtilities {
     }
   }
 
+  @deprecated("This has no effect on Chisel3 Driver! This will be removed in 3.4.", "3.2.2")
   def targetDir(): String = { target_dir getOrElse new File(".").getCanonicalPath }
 
   /**
     * Run the chisel3 compiler and possibly the firrtl compiler with options specified
- *
+    *
     * @param optionsManager The options specified
     * @param dut                    The device under test
     * @return                       An execution result with useful stuff, or failure with message
     */
-  def execute(
+  @deprecated("Use chisel3.stage.ChiselStage.execute. This will be removed in 3.4.", "3.2.2")
+  def execute( // scalastyle:ignore method.length
       optionsManager: ExecutionOptionsManager with HasChiselExecutionOptions with HasFirrtlOptions,
       dut: () => RawModule): ChiselExecutionResult = {
-    val circuit = elaborate(dut)
 
-    // this little hack let's us set the topName with the circuit name if it has not been set from args
-    optionsManager.setTopNameIfNotSet(circuit.name)
+    val annos: AnnotationSeq =
+      Seq(DriverCompatibility.OptionsManagerAnnotation(optionsManager), ChiselGeneratorAnnotation(dut)) ++
+        optionsManager.chiselOptions.toAnnotations ++
+        optionsManager.firrtlOptions.toAnnotations ++
+        optionsManager.commonOptions.toAnnotations
 
-    val firrtlOptions = optionsManager.firrtlOptions
-    val chiselOptions = optionsManager.chiselOptions
+    val targets =
+      Seq( Dependency[DriverCompatibility.AddImplicitOutputFile],
+           Dependency[DriverCompatibility.AddImplicitOutputAnnotationFile],
+           Dependency[DriverCompatibility.DisableFirrtlStage],
+           Dependency[ChiselStage],
+           Dependency[DriverCompatibility.MutateOptionsManager],
+           Dependency[DriverCompatibility.ReEnableFirrtlStage],
+           Dependency[DriverCompatibility.FirrtlPreprocessing],
+           Dependency[chisel3.stage.phases.MaybeFirrtlStage] )
+    val currentState =
+      Seq( Dependency[firrtl.stage.phases.DriverCompatibility.AddImplicitFirrtlFile] )
 
-    // use input because firrtl will be reading this
-    val firrtlString = Emitter.emit(circuit)
-    val firrtlFileName = firrtlOptions.getInputFileName(optionsManager)
-    val firrtlFile = new File(firrtlFileName)
+    val phases: Seq[Phase] = new PhaseManager(targets, currentState) {
+      override val wrappers = Seq( DeletedWrapper(_: Phase) )
+    }.transformOrder
 
-    val w = new FileWriter(firrtlFile)
-    w.write(firrtlString)
-    w.close()
-
-    val annotationFile = new File(optionsManager.getBuildFileName("anno.json"))
-    val af = new FileWriter(annotationFile)
-    val firrtlAnnos = circuit.annotations.map(_.toFirrtl)
-    af.write(JsonProtocol.serialize(firrtlAnnos))
-    af.close()
-
-    /** Find the set of transform classes associated with annotations then
-      * instantiate an instance of each transform
-      * @note Annotations targeting firrtl.Transform will not result in any
-      *   transform being instantiated
-      */
-    val transforms = circuit.annotations
-                       .collect { case anno: RunFirrtlTransform => anno.transformClass }
-                       .distinct
-                       .filterNot(_ == classOf[firrtl.Transform])
-                       .map { transformClass: Class[_ <: Transform] =>
-                         transformClass.newInstance()
-                       }
-    /* This passes the firrtl source and annotations directly to firrtl */
-    optionsManager.firrtlOptions = optionsManager.firrtlOptions.copy(
-      firrtlSource = Some(firrtlString),
-      annotations = optionsManager.firrtlOptions.annotations ++ firrtlAnnos,
-      customTransforms = optionsManager.firrtlOptions.customTransforms ++ transforms.toList)
-
-    val firrtlExecutionResult = if(chiselOptions.runFirrtlCompiler) {
-      Some(firrtl.Driver.execute(optionsManager))
+    val annosx = try {
+      phases.foldLeft(annos)( (a, p) => p.transform(a) )
+    } catch {
+      /* ChiselStage and FirrtlStage can throw StageError. Since Driver is not a StageMain, it cannot catch these. While
+       * Driver is deprecated and removed in 3.2.1+, the Driver catches all errors.
+       */
+      case e: StageError => annos
     }
-    else {
-      None
-    }
-    ChiselExecutionSuccess(Some(circuit), firrtlString, firrtlExecutionResult)
+
+    view[ChiselExecutionResult](annosx)
   }
 
   /**
@@ -194,6 +256,7 @@ object Driver extends BackendCompilationUtilities {
     * @param dut    The device under test
     * @return       An execution result with useful stuff, or failure with message
     */
+  @deprecated("Use chisel3.stage.ChiselStage.execute. This will be removed in 3.4.", "3.2.2")
   def execute(args: Array[String], dut: () => RawModule): ChiselExecutionResult = {
     val optionsManager = new ExecutionOptionsManager("chisel3") with HasChiselExecutionOptions with HasFirrtlOptions
 
@@ -212,6 +275,7 @@ object Driver extends BackendCompilationUtilities {
     *
     * @param args unused args
     */
+  @deprecated("Use chisel3.stage.ChiselMain. This will be removed in 3.4.", "3.2.2")
   def main(args: Array[String]) {
     execute(Array("--help"), null)
   }

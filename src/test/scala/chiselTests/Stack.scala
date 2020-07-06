@@ -2,9 +2,8 @@
 
 package chiselTests
 
-import scala.collection.mutable.Stack
-
 import chisel3._
+import chisel3.stage.ChiselStage
 import chisel3.util._
 
 class ChiselStack(val depth: Int) extends Module {
@@ -17,7 +16,7 @@ class ChiselStack(val depth: Int) extends Module {
   })
 
   val stack_mem = Mem(depth, UInt(32.W))
-  val sp        = RegInit(0.U(log2Ceil(depth+1).W))
+  val sp        = RegInit(0.U(log2Ceil(depth + 1).W))
   val out       = RegInit(0.U(32.W))
 
   when (io.en) {
@@ -71,7 +70,7 @@ class StackTester(c: Stack) extends Tester(c) {
 class StackSpec extends ChiselPropSpec {
 
   property("Stack should elaborate") {
-    elaborate { new ChiselStack(2) }
+    ChiselStage.elaborate { new ChiselStack(2) }
   }
 
   ignore("StackTester should return the correct result") { }
