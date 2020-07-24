@@ -31,11 +31,6 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions)
     _commands.toSeq
   }
 
-  // IO for this Module. At the Scala level (pre-FIRRTL transformations),
-  // connections in and out of a Module may only go through `io` elements.
-  def in: Record
-  def out: Record
-
   //
   // Other Internal Functions
   //
@@ -60,42 +55,6 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions)
           port.setRef(ModuleIO(this, "<UNNAMED>"))
       }
     }
-  }
-
-  /** Connect this to that $coll mono-directionally hand side and element-wise.
-      *
-      * @param that the $coll to connect to
-      * @group Connect
-      */
-  def >>> (that: RawModule)(implicit connectionCompileOptions:CompileOptions): RawModule = {
-    implicit val sourceInfo = UnlocatableSourceInfo
-    val input_ports = that.in.getElements
-    val output_ports = this.out.getElements
-    if(input_ports.size != output_ports.size){
-      throwException("The input does not match with outputs")
-    }
-    for((input_port, idx) <- input_ports.zipWithIndex){
-      input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
-    }
-    that
-  }
-
-  /** Connect this to that $coll mono-directionally hand side and element-wise.
-      *
-      * @param that the $coll to connect to
-      * @group Connect
-      */
-  def >>> (that: Aggregate)(implicit connectionCompileOptions:CompileOptions): Aggregate = {
-    implicit val sourceInfo = UnlocatableSourceInfo
-    val input_ports = that.getElements
-    val output_ports = this.out.getElements
-    if(input_ports.size != output_ports.size){
-      throwException("The input does not match with outputs")
-    }
-    for((input_port, idx) <- input_ports.zipWithIndex){
-      input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
-    }
-    that
   }
 
   private[chisel3] override def generateComponent(): Component = { // scalastyle:ignore cyclomatic.complexity
@@ -216,6 +175,43 @@ abstract class MultiIOModule(implicit moduleCompileOptions: CompileOptions)
 
 package internal {
 
+/** Abstract base class for SimpleChiselModules that contain Chisel RTL.
+  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
+  * multiple IO() declarations.
+  */
+abstract trait SimpleChiselModuleTrait{
+  // IO for this Module. At the Scala level (pre-FIRRTL transformations),
+  // connections in and out of a Module may only go through `in and out` elements.
+  def in: Record
+  def out: Record
+  def ctrl: Record
+  def >>>(that: Aggregate): Aggregate
+  def >>>(that: SimpleChiselModuleInternal): SimpleChiselModuleInternal
+  def >>>(that: SimpleChiselStateInternal): SimpleChiselStateInternal
+  def >>>(that: SimpleChiselLogicInternal): SimpleChiselLogicInternal
+}
+
+/** Abstract base class for SimpleChiselState that contain Chisel RTL.
+  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
+  * multiple IO() declarations.
+  */
+abstract class SimpleChiselModuleInternal(implicit moduleCompileOptions: CompileOptions) 
+    extends LegacyModule with SimpleChiselModuleTrait{}
+
+/** Abstract base class for SimpleChiselState that contain Chisel RTL.
+  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
+  * multiple IO() declarations.
+  */
+abstract class SimpleChiselStateInternal(implicit moduleCompileOptions: CompileOptions) 
+    extends State with SimpleChiselModuleTrait{}
+
+/** Abstract base class for SimpleChiselLogic that contain Chisel RTL.
+  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
+  * multiple IO() declarations.
+  */
+abstract class SimpleChiselLogicInternal(implicit moduleCompileOptions: CompileOptions) 
+    extends Logic with SimpleChiselModuleTrait{}
+
   /** Legacy Module class that restricts IOs to just io, clock, and reset, and provides a constructor
     * for threading through explicit clock and reset.
     *
@@ -244,13 +240,8 @@ package internal {
     private[chisel3] override def generateComponent(): Component = {
       _compatAutoWrapPorts()  // pre-IO(...) compatibility hack
 
-      // Restrict IO to just io, clock, and reset
-      require(in != null, "Module must have in")
-      require(out != null, "Module must have out")
-      require(portsContains(in), "Module must have in wrapped in IO(...)")
-      require(portsContains(out), "Module must have io wrapped in IO(...)")
+      // Restrict IO to just in, out, clock, and reset
       require((portsContains(clock)) && (portsContains(reset)), "Internal error, module did not have clock or reset as IO") // scalastyle:ignore line.size.limit
-      // require(portsSize == 4, "Module must only have in, out, clock, and reset as IO")
 
       super.generateComponent()
     }

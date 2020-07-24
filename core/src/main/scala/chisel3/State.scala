@@ -15,7 +15,7 @@ import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{ModuleName, ModuleTarget, IsModule}
 import chisel3.internal.sourceinfo.UnlocatableSourceInfo
 
-/** Abstract base class for State, which only contains basic sequential blocks
+/** Abstract base class for State, which only contains basic sequential blocks.
   * These may contain both logic and state which are written in the Module
   * body (constructor).
   * This abstract base class includes an implicit clock and reset.
@@ -23,30 +23,9 @@ import chisel3.internal.sourceinfo.UnlocatableSourceInfo
   * @note State instantiations must be wrapped in a State() call.
   */
 abstract class State(implicit moduleCompileOptions: CompileOptions)
-    extends RawModule {
-  // Implicit clock and reset pins
-  final val clock: Clock = IO(Input(Clock()))
-  final val reset: Reset = IO(Input(mkReset))
+    extends MultiIOModule {
 
-  private[chisel3] def mkReset: Reset = {
-    // Top module and compatibility mode use Bool for reset
-    val inferReset = _parent.isDefined && moduleCompileOptions.inferModuleReset
-    if (inferReset) Reset() else Bool()
-  }
-
-  // Setup ClockAndReset
-  Builder.currentClock = Some(clock)
-  Builder.currentReset = Some(reset)
-
-  private[chisel3] override def initializeInParent(parentCompileOptions: CompileOptions): Unit = {
-    implicit val sourceInfo = UnlocatableSourceInfo
-
-    super.initializeInParent(parentCompileOptions)
-    clock := Builder.forcedClock
-    reset := Builder.forcedReset
-  }
-
-private[chisel3] override def generateComponent(): Component = { // scalastyle:ignore cyclomatic.complexity
+  private[chisel3] override def generateComponent(): Component = { // scalastyle:ignore cyclomatic.complexity
     require(!_closed, "Can't generate module more than once")
     _closed = true
 
@@ -164,7 +143,7 @@ object State extends SourceInfoDoc {
     // We want to check whether this is logic or not
     module match{
         case state: State => ()
-        case _ => throwException("Only subclass of Logic type can be instantiated in Logic wrapper")
+        case _ => throwException("Only subclass of State or SimpleChiselState type can be instantiated in Logic wrapper")
     }
 
     if (Builder.whenDepth != 0) {

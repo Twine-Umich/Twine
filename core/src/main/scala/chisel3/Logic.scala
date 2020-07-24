@@ -15,7 +15,7 @@ import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{ModuleName, ModuleTarget, IsModule}
 import chisel3.internal.sourceinfo.UnlocatableSourceInfo
 
-/** Abstract base class for Logic, which only contains basic combinational blocks
+/** Abstract base class for Logic, which only contains basic combinational blocks.
   * These may contain logic which are written in the Module
   * body (constructor).
   * This abstract base class includes an implicit clock and reset.
@@ -23,29 +23,8 @@ import chisel3.internal.sourceinfo.UnlocatableSourceInfo
   * @note Logic instantiations must be wrapped in a Logic() call.
   */
 abstract class Logic(implicit moduleCompileOptions: CompileOptions)
-    extends RawModule {
-  // Implicit clock and reset pins
-  final val clock: Clock = IO(Input(Clock()))
-  final val reset: Reset = IO(Input(mkReset))
-
-  private[chisel3] def mkReset: Reset = {
-    // Top module and compatibility mode use Bool for reset
-    val inferReset = _parent.isDefined && moduleCompileOptions.inferModuleReset
-    if (inferReset) Reset() else Bool()
-  }
-
-  // Setup ClockAndReset
-  Builder.currentClock = Some(clock)
-  Builder.currentReset = Some(reset)
-
-  private[chisel3] override def initializeInParent(parentCompileOptions: CompileOptions): Unit = {
-    implicit val sourceInfo = UnlocatableSourceInfo
-
-    super.initializeInParent(parentCompileOptions)
-    clock := Builder.forcedClock
-    reset := Builder.forcedReset
-  }
-
+    extends MultiIOModule {
+  
   private[chisel3] override def generateComponent(): Component = { // scalastyle:ignore cyclomatic.complexity
     require(!_closed, "Can't generate module more than once")
     _closed = true

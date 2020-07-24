@@ -54,7 +54,43 @@ sealed abstract class Aggregate extends Data {
       * @param that the $coll to connect to
       * @group Connect
       */
-  def >>> (that: RawModule)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): RawModule = {
+  def >>>(that: SimpleChiselStateInternal)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): SimpleChiselStateInternal = {
+    implicit val sourceInfo = UnlocatableSourceInfo
+    val input_ports = that.in.getElements
+    val output_ports = this.getElements
+    if(input_ports.size != output_ports.size){
+      throwException("The input does not match with outputs")
+    }
+    for((input_port, idx) <- input_ports.zipWithIndex){
+      input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
+    }
+    that
+  }
+
+  /** Connect this to that $coll mono-directionally hand side and element-wise.
+      *
+      * @param that the $coll to connect to
+      * @group Connect
+      */
+  def >>>(that: SimpleChiselModuleInternal)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): SimpleChiselModuleInternal= {
+    implicit val sourceInfo = UnlocatableSourceInfo
+    val input_ports = that.in.getElements
+    val output_ports = this.getElements
+    if(input_ports.size != output_ports.size){
+      throwException("The input does not match with outputs")
+    }
+    for((input_port, idx) <- input_ports.zipWithIndex){
+      input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
+    }
+    that
+  }
+
+  /** Connect this to that $coll mono-directionally hand side and element-wise.
+      *
+      * @param that the $coll to connect to
+      * @group Connect
+      */
+  def >>>(that: SimpleChiselLogicInternal)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): SimpleChiselLogicInternal = {
     implicit val sourceInfo = UnlocatableSourceInfo
     val input_ports = that.in.getElements
     val output_ports = this.getElements
