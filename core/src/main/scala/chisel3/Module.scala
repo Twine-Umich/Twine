@@ -1,5 +1,6 @@
 // See LICENSE for license details.
 
+import collection.mutable.Queue
 package chisel3
 
 import scala.collection.immutable.ListMap
@@ -102,6 +103,49 @@ object Module extends SourceInfoDoc {
           }
           name
         }
+
+
+    var visited: Map[Int, Boolean] = Map()
+    var parent: Map[Int, Int] = Map()
+
+    def backtracePath(start: Int, end: Int): List[Int] = {
+      val p = parent(end)
+      if (p == -1) return List(start)
+
+      return backtracePath(start, p) ::: List(end)
+    }
+
+    def findPath(
+        graph: List[List[Int]],
+        start: Int,
+        end: Int
+    ): Option[List[Int]] = {
+
+      val queue = Queue[Int]()
+
+      for (i <- 0 to graph.length) {
+        visited += (i -> false)
+      }
+      queue.enqueue(start)
+      parent += (start -> -1)
+
+      while (queue.nonEmpty) {
+        val node = queue.dequeue()
+        if (node == end) return Some(backtracePath(start, end))
+        if (!visited(node)) {
+          visited += (node -> true)
+          for (neighbor <- graph(node)) {
+            parent += (neighbor -> node)
+            queue.enqueue(neighbor)
+          }
+
+        }
+      }
+
+      return None
+
+    }
+
         for(port <- d.ports){
           port.id match {
             case ctrl: DecoupledIOCtrlInternal =>{
