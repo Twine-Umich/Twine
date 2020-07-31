@@ -12,10 +12,13 @@ import java.util.IdentityHashMap
 import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
+import chisel3.simplechisel._
 import chisel3.internal.sourceinfo.{DeprecatedSourceInfo, SourceInfo, SourceInfoTransform, UnlocatableSourceInfo}
 import chisel3.internal.sourceinfo.InstTransform
 import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{ModuleName, ModuleTarget, IsModule}
+import scala.collection.mutable.HashMap
+import scala.collection.mutable.ArrayBuffer
 
 object Module extends SourceInfoDoc {
   /** A wrapper method that all Module instantiations must be wrapped in
@@ -66,6 +69,124 @@ object Module extends SourceInfoDoc {
     Builder.currentReset = saveReset
 
     val component = module.generateComponent()
+
+    val hashMap: HashMap[String, Int] = new HashMap()
+    val lists: ArrayBuffer[ArrayBuffer[Int]] = new ArrayBuffer[ArrayBuffer[Int]]
+    component match{
+      case d:DefModule =>{
+        def traversePort(elt: Data):Any = elt match {
+            case data: Vec[_] => {
+                for(e <- data.getElements){
+                  if(!hashMap.contains(s"${e.getRef.fullName(d)}")){
+                    lists += new ArrayBuffer[Int]()
+                    hashMap += (s"${e.getRef.fullName(d)}" -> (lists.size - 1))
+                  }
+                }
+            }
+            case data: Record => {
+              for(e <- data.elements.toIndexedSeq){
+                traversePort(e._2)
+              }
+            }
+            case _ =>{
+              if(!hashMap.contains(s"${elt.getRef.fullName(d)}")){
+                lists += new ArrayBuffer[Int]()
+                hashMap += (s"${elt.getRef.fullName(d)}" -> (lists.size - 1))
+              }
+            }
+        }
+        def addName(name: String): String = {
+          if(!hashMap.contains(name)){
+            lists += new ArrayBuffer[Int]()
+            hashMap += (name -> (lists.size - 1))
+          }
+          name
+        }
+        for(port <- d.ports){
+          port.id match {
+            case ctrl: DecoupledIOCtrlInternal =>{
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.in.valid.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.in.ready.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.out.valid.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.clear.getRef.fullName(d)}" -> (lists.size - 1))
+            }
+            case ctrl: OutOfOrderIOCtrlInternal =>{
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.in.valid.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.in.ready.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.out.valid.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.clear.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.in.ticket_num.getRef.fullName(d)}" -> (lists.size - 1))
+              lists += new ArrayBuffer[Int]()
+              hashMap += (s"${ctrl.out.ticket_num.getRef.fullName(d)}" -> (lists.size - 1))
+            }
+            case _ => traversePort(port.id)
+          }
+        }
+
+        for(command <- d.commands){
+          command match{
+            case wire:DefWire =>{
+              traversePort(wire.id)
+            }
+            case _ =>()
+          }
+        }
+        for(command <- d.commands){
+          command match{
+            case prim:DefPrim[_] =>{              
+              traversePort(prim.id)
+              val idx_of_dest = hashMap(prim.id.getRef.fullName(d))
+              for(arg <- prim.args){
+                if(hashMap.contains(arg.fullName(d))){
+                  lists(hashMap(arg.fullName(d))) += idx_of_dest
+                }
+              }
+            }
+            case _ =>()
+          }
+        }
+        for(command <- d.commands){
+          command match{
+            case connect:Connect =>{
+                if(hashMap.contains(connect.exp.fullName(d))){
+                  if(hashMap.contains(connect.loc.fullName(d))){
+                    val idx_of_dest = hashMap(connect.loc.fullName(d))
+                    lists(hashMap(connect.exp.fullName(d))) += idx_of_dest
+                  }
+                }
+            }
+            case connect: ConnectInit =>{
+                if(hashMap.contains(connect.exp.fullName(d))){
+                  if(hashMap.contains(connect.loc.fullName(d))){
+                    val idx_of_dest = hashMap(connect.loc.fullName(d))
+                    lists(hashMap(connect.exp.fullName(d))) += idx_of_dest
+                  }
+                }
+            }
+            //TODO: handle bulk connect
+            case connect: BulkConnect => ()
+            case _ =>()
+          }
+        }
+
+      }
+    }
+
+    //TODO: Yonathan's algorithm
+
     Builder.components += component
 
     // Handle connections at enclosing scope

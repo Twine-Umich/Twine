@@ -1,8 +1,9 @@
 // See LICENSE for license details.
 
-package chisel3.util
+package chisel3.simplechisel.util
 
 import chisel3._ 
+import chisel3.simplechisel._
 import chisel3.internal._ 
 import chisel3.internal.firrtl._
 import chisel3.experimental._ 
@@ -38,7 +39,7 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
     * @param that the $coll to connect to
     * @group Connect
     */
-    def >>> (that: SimpleChiselModuleInternal): SimpleChiselModuleInternal = {
+    def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
         implicit val sourceInfo = UnlocatableSourceInfo
         val input_ports = that.in.getElements
         val output_ports = this.out.getElements
@@ -52,43 +53,6 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
         that
     }
 
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>> (that: SimpleChiselStateInternal): SimpleChiselStateInternal = {
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.ctrl >>> that.ctrl
-        that
-    }
-
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>> (that: SimpleChiselLogicInternal): SimpleChiselLogicInternal = {
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.ctrl >>> that.ctrl
-        that
-    }
     /** Connect this to that $coll mono-directionally hand side and element-wise.
       *
       * @param that the $coll to connect to
@@ -135,50 +99,12 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
         super.generateComponent()
     }
 
-       /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>>(that: SimpleChiselModuleInternal): SimpleChiselModuleInternal = {
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.ctrl >>> that.ctrl
-        that
-    }
-
     /** Connect this to that $coll mono-directionally hand side and element-wise.
     *
     * @param that the $coll to connect to
     * @group Connect
     */
-    def >>>(that: SimpleChiselStateInternal): SimpleChiselStateInternal = {
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.ctrl >>> that.ctrl
-        that
-    }
-
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>>(that: SimpleChiselLogicInternal): SimpleChiselLogicInternal = {
+    def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
         implicit val sourceInfo = UnlocatableSourceInfo
         val input_ports = that.in.getElements
         val output_ports = this.out.getElements
@@ -237,12 +163,12 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
         super.generateComponent()
     }
 
-        /** Connect this to that $coll mono-directionally hand side and element-wise.
+    /** Connect this to that $coll mono-directionally hand side and element-wise.
     *
     * @param that the $coll to connect to
     * @group Connect
     */
-    def >>> (that: SimpleChiselModuleInternal): SimpleChiselModuleInternal = {
+    def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
         implicit val sourceInfo = UnlocatableSourceInfo
         val input_ports = that.in.getElements
         val output_ports = this.out.getElements
@@ -256,44 +182,6 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
         that
     }
 
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>> (that: SimpleChiselStateInternal): SimpleChiselStateInternal = {
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.ctrl >>> that.ctrl
-        that
-    }
-
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>>(that: SimpleChiselLogicInternal): SimpleChiselLogicInternal = {
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.ctrl >>> that.ctrl
-        that
-    }
-    
   /** Connect this to that $coll mono-directionally hand side and element-wise.
     *
     * @param that the $coll to connect to

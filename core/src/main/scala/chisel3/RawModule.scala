@@ -174,44 +174,6 @@ abstract class MultiIOModule(implicit moduleCompileOptions: CompileOptions)
 }
 
 package internal {
-
-/** Abstract base class for SimpleChiselModules that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract trait SimpleChiselModuleTrait{
-  // IO for this Module. At the Scala level (pre-FIRRTL transformations),
-  // connections in and out of a Module may only go through `in and out` elements.
-  def in: Record
-  def out: Record
-  def ctrl: Record
-  def >>>(that: Aggregate): Aggregate
-  def >>>(that: SimpleChiselModuleInternal): SimpleChiselModuleInternal
-  def >>>(that: SimpleChiselStateInternal): SimpleChiselStateInternal
-  def >>>(that: SimpleChiselLogicInternal): SimpleChiselLogicInternal
-}
-
-/** Abstract base class for SimpleChiselState that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract class SimpleChiselModuleInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends LegacyModule with SimpleChiselModuleTrait{}
-
-/** Abstract base class for SimpleChiselState that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract class SimpleChiselStateInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends State with SimpleChiselModuleTrait{}
-
-/** Abstract base class for SimpleChiselLogic that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract class SimpleChiselLogicInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends Logic with SimpleChiselModuleTrait{}
-
   /** Legacy Module class that restricts IOs to just io, clock, and reset, and provides a constructor
     * for threading through explicit clock and reset.
     *
