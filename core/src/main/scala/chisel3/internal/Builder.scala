@@ -9,6 +9,8 @@ import chisel3.experimental._
 import chisel3.internal.firrtl._
 import chisel3.internal.naming._
 import _root_.firrtl.annotations.{CircuitName, ComponentName, IsMember, ModuleName, Named, ReferenceTarget}
+import chisel3.internal.sourceinfo.UnlocatableSourceInfo
+import chisel3.CompileOptions
 
 import scala.collection.mutable
 
@@ -335,6 +337,18 @@ private[chisel3] object Builder {
     // Bind each element of the returned Data to being a Op
     cmd.id.bind(OpBinding(forcedUserModule))
     pushCommand(cmd).id
+  }
+  
+  // TODO(twigg): Ideally, binding checks and new bindings would all occur here
+  // However, rest of frontend can't support this yet.
+  def insertCommand[T <: Command](c: T, pos:Int): T = {
+    forcedUserModule.insertCommand(c, pos)
+    c
+  }
+  def insertOp[T <: Data](cmd: DefPrim[T], pos:Int): T = {
+    // Bind each element of the returned Data to being a Op
+    cmd.id.bind(OpBinding(forcedUserModule))
+    insertCommand(cmd,pos).id
   }
 
   // Called when Bundle construction begins, used to record a stack of open Bundle constructors to

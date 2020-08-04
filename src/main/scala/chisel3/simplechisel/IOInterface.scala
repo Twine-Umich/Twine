@@ -53,11 +53,12 @@ class NoIOCtrl extends SimpleChiselIOCtrl with NoIOCtrlInternal{
 
 }
 
-class TightlyCoupledIOCtrl extends  SimpleChiselIOCtrl with TightlyCoupledIOCtrlInternal{
+class TightlyCoupledIOCtrl(val num_of_cycles: Int) extends  SimpleChiselIOCtrl with TightlyCoupledIOCtrlInternal{
     val stall = Input(Bool())
     val clear = Input(Bool())
     val stuck = Output(Bool())
-
+    val valid_input = Input(Bool())
+    val valid_output = Output(Bool())
     /** Connect this to that $coll based on ctrl connection rules
     * https://github.com/SimpleChisel/simple-chisel-release
     *
@@ -70,21 +71,16 @@ class TightlyCoupledIOCtrl extends  SimpleChiselIOCtrl with TightlyCoupledIOCtrl
             }
             case d:TightlyCoupledIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
-                this.stall := ctrlIO.stuck
             }
             case d:ValidIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[ValidIOCtrl]
-                ctrlIO.in.valid := this.stuck
             }
             case d:DecoupledIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[DecoupledIOCtrl]
-                this.stall := !ctrlIO.in.ready
-                ctrlIO.in.valid := this.stuck
+
             }
             case d:OutOfOrderIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
-                this.stall := !ctrlIO.in.ready
-                ctrlIO.in.valid := this.stuck
             }
         }
         that
@@ -113,21 +109,17 @@ class ValidIOCtrl extends  SimpleChiselIOCtrl with ValidIOCtrlInternal{
             }
             case d:TightlyCoupledIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
-                this.stall := ctrlIO.stuck
             }
             case d:ValidIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[ValidIOCtrl]
-                this.stall := ctrlIO.stuck
                 ctrlIO.in.valid := this.out.valid
             }
             case d:DecoupledIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[DecoupledIOCtrl]
-                this.stall := !ctrlIO.in.ready
                 ctrlIO.in.valid := this.out.valid
             }
             case d:OutOfOrderIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
-                this.stall := !ctrlIO.in.ready
                 ctrlIO.in.valid := this.out.valid
             }
         }
@@ -153,11 +145,9 @@ class DecoupledIOCtrl extends SimpleChiselIOCtrl with  DecoupledIOCtrlInternal {
             }
             case d:TightlyCoupledIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
-                this.out.ready := ctrlIO.stuck
             }
             case d:ValidIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[ValidIOCtrl]
-                this.out.ready := ctrlIO.stuck
                 ctrlIO.in.valid := this.out.valid
             }
             case d:DecoupledIOCtrl =>{
@@ -169,6 +159,7 @@ class DecoupledIOCtrl extends SimpleChiselIOCtrl with  DecoupledIOCtrlInternal {
                 val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
                 this.out.ready := ctrlIO.in.ready
                 ctrlIO.in.valid := this.out.valid
+                ctrlIO.in.ticket_num := DontCare
             }
         }
         that
@@ -192,11 +183,9 @@ class OutOfOrderIOCtrl(val size_of_reorder_buffer: Int) extends SimpleChiselIOCt
             }
             case d:TightlyCoupledIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
-                this.out.ready := ctrlIO.stuck
             }
             case d:ValidIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[ValidIOCtrl]
-                this.out.ready := ctrlIO.stuck
                 ctrlIO.in.valid := this.out.valid
             }
             case d:DecoupledIOCtrl =>{
@@ -208,6 +197,7 @@ class OutOfOrderIOCtrl(val size_of_reorder_buffer: Int) extends SimpleChiselIOCt
                 val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
                 this.out.ready := ctrlIO.in.ready
                 ctrlIO.in.valid := this.out.valid
+                ctrlIO.in.ticket_num := this.out.ticket_num
             }
         }
         that

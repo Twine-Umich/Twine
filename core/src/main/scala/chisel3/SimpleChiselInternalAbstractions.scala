@@ -10,16 +10,17 @@ import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
 import chisel3.internal.sourceinfo._
 
-  /** Abstract base class for SimpleChiselModules that contain Chisel RTL.
+  /** Abstract base class for simpleChiselConnectionMap that contain Chisel RTL.
   * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
   * multiple IO() declarations.
   */
-abstract trait SimpleChiselModuleTrait{
+trait SimpleChiselModuleTrait{
   // IO for this Module. At the Scala level (pre-FIRRTL transformations),
   // connections in and out of a Module may only go through `in and out` elements.
   def in: Record
   def out: Record
   def ctrl: Record
+
   def >>>(that: Aggregate): Aggregate
   def >>>[T <: SimpleChiselModuleTrait](that: T): T
 }
@@ -29,21 +30,27 @@ abstract trait SimpleChiselModuleTrait{
   * multiple IO() declarations.
   */
 abstract class SimpleChiselModuleInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends LegacyModule with SimpleChiselModuleTrait{}
+    extends LegacyModule with SimpleChiselModuleTrait{
+      private[chisel3] def generateSimpleChiselComponent: Any
+    }
 
 /** Abstract base class for SimpleChiselState that contain Chisel RTL.
   * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
   * multiple IO() declarations.
   */
 abstract class SimpleChiselStateInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends State with SimpleChiselModuleTrait{}
+    extends State with SimpleChiselModuleTrait{
+      private[chisel3] def generateSimpleChiselComponent: Any
+    }
 
 /** Abstract base class for SimpleChiselLogic that contain Chisel RTL.
   * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
   * multiple IO() declarations.
   */
 abstract class SimpleChiselLogicInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends Logic with SimpleChiselModuleTrait{}
+    extends Logic with SimpleChiselModuleTrait{
+      private[chisel3] def generateSimpleChiselComponent: Any
+    }
 
 trait SimpleChiselIOCtrlInternal{}
 
@@ -65,6 +72,7 @@ trait OutOfOrderInterfaceInternal{
 abstract trait NoIOCtrlInternal{}
 
 abstract trait TightlyCoupledIOCtrlInternal{
+    def num_of_cycles: Int
     def stall: Bool
     def clear: Bool
     def stuck: Bool  

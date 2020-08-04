@@ -14,6 +14,7 @@ import chisel3.internal.sourceinfo.{InstTransform, SourceInfo}
 import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{ModuleName, ModuleTarget, IsModule}
 import chisel3.internal.sourceinfo.UnlocatableSourceInfo
+import chisel3.simplechisel._
 
 /** Abstract base class for Logic, which only contains basic combinational blocks.
   * These may contain logic which are written in the Module
@@ -153,14 +154,40 @@ object Logic extends SourceInfoDoc {
                      "This is probably due to rewrapping a Module instance with Module()." +
                      sourceInfo.makeMessage(" See " + _))
     }
-    Builder.currentModule = parent // Back to parent!
+
+
+    module match {
+      case m:SimpleChiselLogicInternal =>{
+         val md = module.asInstanceOf[SimpleChiselLogicInternal]
+         md.generateSimpleChiselComponent
+        }
+      case _ =>()
+    }
+
+
+    Builder.currentModule = parent
     Builder.whenDepth = whenDepth
     Builder.currentClock = saveClock   // Back to clock and reset scope
     Builder.currentReset = saveReset
 
     val component = module.generateComponent()
-    Builder.components += component
 
+    parent match{
+      case Some(m) => {
+        module match{
+          case s:SimpleChiselModuleTrait =>{
+            val scm = module.asInstanceOf[SimpleChiselModuleTrait]
+            m.simpleChiselConnectionMap += ((scm, new ArrayBuffer[Int]()))
+            val bm = module.asInstanceOf[BaseModule]
+            bm.simpleChiselSubModuleTrackingId = m.simpleChiselConnectionMap.size - 1
+          }
+          case _ =>()
+        }
+      }
+      case None => ()
+    }
+
+    Builder.components += component
     // Handle connections at enclosing scope
     if(!Builder.currentModule.isEmpty) {
       pushCommand(DefInstance(sourceInfo, module, component.ports))

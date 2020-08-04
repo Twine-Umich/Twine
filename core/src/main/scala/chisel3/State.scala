@@ -14,6 +14,7 @@ import chisel3.internal.sourceinfo.{InstTransform, SourceInfo}
 import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{ModuleName, ModuleTarget, IsModule}
 import chisel3.internal.sourceinfo.UnlocatableSourceInfo
+import chisel3.simplechisel._
 
 /** Abstract base class for State, which only contains basic sequential blocks.
   * These may contain both logic and state which are written in the Module
@@ -154,12 +155,38 @@ object State extends SourceInfoDoc {
                      "This is probably due to rewrapping a Module instance with Module()." +
                      sourceInfo.makeMessage(" See " + _))
     }
+
+
+    module match {
+      case m:SimpleChiselStateInternal =>{
+         val md = module.asInstanceOf[SimpleChiselStateInternal]
+         md.generateSimpleChiselComponent
+        }
+      case _ =>()
+    }
+
     Builder.currentModule = parent // Back to parent!
     Builder.whenDepth = whenDepth
     Builder.currentClock = saveClock   // Back to clock and reset scope
     Builder.currentReset = saveReset
 
     val component = module.generateComponent()
+
+    parent match{
+      case Some(m) => {
+        module match{
+          case s:SimpleChiselModuleTrait =>{
+            val scm = module.asInstanceOf[SimpleChiselModuleTrait]
+            m.simpleChiselConnectionMap += ((scm, new ArrayBuffer[Int]()))
+            val bm = module.asInstanceOf[BaseModule]
+            bm.simpleChiselSubModuleTrackingId = m.simpleChiselConnectionMap.size - 1
+          }
+          case _ =>()
+        }
+      }
+      case None => ()
+    }
+
     Builder.components += component
 
     // Handle connections at enclosing scope

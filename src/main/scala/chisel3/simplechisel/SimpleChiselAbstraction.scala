@@ -8,6 +8,7 @@ import chisel3.internal._
 import chisel3.internal.firrtl._
 import chisel3.experimental._ 
 import chisel3.internal.sourceinfo._
+
 /** Abstract base class for SimpleChiselState, which only contains basic sequential blocks.
   * These may contain both logic and state which are written in the Module
   * body (constructor).
@@ -19,6 +20,36 @@ import chisel3.internal.sourceinfo._
 abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
   extends SimpleChiselStateInternal{
     override def ctrl: SimpleChiselIOCtrl
+    
+    private[chisel3] def generateSimpleChiselComponent(): Any = {
+        if(!this.simpleChiselConnectionMap.isEmpty){
+          return
+        }
+        ctrl match{
+          case d:TightlyCoupledIOCtrl =>{
+            val ctrlIO = ctrl.asInstanceOf[TightlyCoupledIOCtrl]
+            if(ctrlIO.num_of_cycles > 0){
+              val tightlyCoupledQ = Reg(Vec(ctrlIO.num_of_cycles, Bool()))
+              when( (ctrlIO.stall||ctrlIO.stuck) ){
+                tightlyCoupledQ(0) := ctrlIO.valid_input
+              }.otherwise{
+                tightlyCoupledQ(0) := tightlyCoupledQ(0)
+              }
+              for(i <- 1 until ctrlIO.num_of_cycles){
+                when( (ctrlIO.stall||ctrlIO.stuck)){
+                  tightlyCoupledQ(i) := tightlyCoupledQ(i-1)
+                }.otherwise{
+                  tightlyCoupledQ(i) := tightlyCoupledQ(i)
+                }
+              }
+              ctrlIO.valid_output := tightlyCoupledQ(ctrlIO.num_of_cycles - 1)
+            }else{
+              ctrlIO.valid_output := ctrlIO.valid_input
+            }
+          }
+          case _ => ()
+        }
+    }
 
     private[chisel3] override def generateComponent(): Component = {
 
@@ -49,7 +80,11 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
         for((input_port, idx) <- input_ports.zipWithIndex){
           input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
         }
+        val that_mod = that.asInstanceOf[BaseModule]
+        Builder.currentModule.get.simpleChiselConnectionMap(this.simpleChiselSubModuleTrackingId)._2 += 
+          that_mod.simpleChiselSubModuleTrackingId
         this.ctrl >>> that.ctrl
+
         that
     }
 
@@ -68,6 +103,7 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
         for((input_port, idx) <- input_ports.zipWithIndex){
           input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
         }
+        that.from_module = Some(this.simpleChiselSubModuleTrackingId)
         that
     }
 }
@@ -85,6 +121,36 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
   extends SimpleChiselLogicInternal{
     override def ctrl: SimpleChiselIOCtrl
 
+    private[chisel3] def generateSimpleChiselComponent(): Any = {
+        if(!this.simpleChiselConnectionMap.isEmpty){
+          return
+        }
+        ctrl match{
+          case d:TightlyCoupledIOCtrl =>{
+            val ctrlIO = ctrl.asInstanceOf[TightlyCoupledIOCtrl]
+            if(ctrlIO.num_of_cycles > 0){
+              val tightlyCoupledQ = Reg(Vec(ctrlIO.num_of_cycles, Bool()))
+              when( (ctrlIO.stall||ctrlIO.stuck) ){
+                tightlyCoupledQ(0) := ctrlIO.valid_input
+              }.otherwise{
+                tightlyCoupledQ(0) := tightlyCoupledQ(0)
+              }
+              for(i <- 1 until ctrlIO.num_of_cycles){
+                when( (ctrlIO.stall||ctrlIO.stuck)){
+                  tightlyCoupledQ(i) := tightlyCoupledQ(i-1)
+                }.otherwise{
+                  tightlyCoupledQ(i) := tightlyCoupledQ(i)
+                }
+              }
+              ctrlIO.valid_output := tightlyCoupledQ(ctrlIO.num_of_cycles - 1)
+            }else{
+              ctrlIO.valid_output := ctrlIO.valid_input
+            }
+          }
+          case _ => ()
+        }
+    }
+    
     private[chisel3] override def generateComponent(): Component = {
 
         // Restrict IO to must have ctrl, in, and out
@@ -114,10 +180,13 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
         for((input_port, idx) <- input_ports.zipWithIndex){
           input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
         }
+        val that_mod = that.asInstanceOf[BaseModule]
+        Builder.currentModule.get.simpleChiselConnectionMap(this.simpleChiselSubModuleTrackingId)._2 += 
+          that_mod.simpleChiselSubModuleTrackingId
         this.ctrl >>> that.ctrl
+
         that
     }
-
   /** Connect this to that $coll mono-directionally hand side and element-wise.
     *
     * @param that the $coll to connect to
@@ -133,6 +202,7 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
       for((input_port, idx) <- input_ports.zipWithIndex){
         input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
       }
+      that.from_module = Some(this.simpleChiselSubModuleTrackingId)
       that
   }
 }
@@ -149,8 +219,37 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
   extends SimpleChiselModuleInternal{
     override def ctrl: SimpleChiselIOCtrl
 
+    private[chisel3] def generateSimpleChiselComponent(): Any = {
+        if(!this.simpleChiselConnectionMap.isEmpty){
+          return
+        }
+        ctrl match{
+          case d:TightlyCoupledIOCtrl =>{
+            val ctrlIO = ctrl.asInstanceOf[TightlyCoupledIOCtrl]
+            if(ctrlIO.num_of_cycles > 0){
+              val tightlyCoupledQ = Reg(Vec(ctrlIO.num_of_cycles, Bool()))
+              when( (ctrlIO.stall||ctrlIO.stuck) ){
+                tightlyCoupledQ(0) := ctrlIO.valid_input
+              }.otherwise{
+                tightlyCoupledQ(0) := tightlyCoupledQ(0)
+              }
+              for(i <- 1 until ctrlIO.num_of_cycles){
+                when( (ctrlIO.stall||ctrlIO.stuck)){
+                  tightlyCoupledQ(i) := tightlyCoupledQ(i-1)
+                }.otherwise{
+                  tightlyCoupledQ(i) := tightlyCoupledQ(i)
+                }
+              }
+              ctrlIO.valid_output := tightlyCoupledQ(ctrlIO.num_of_cycles - 1)
+            }else{
+              ctrlIO.valid_output := ctrlIO.valid_input
+            }
+          }
+          case _ => ()
+        }
+    }
+  
     private[chisel3] override def generateComponent(): Component = {
-
         // Restrict IO to must have ctrl, in, and out
         require(in != null, "Module must have in")
         require(out != null, "Module must have out")
@@ -178,7 +277,11 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
         for((input_port, idx) <- input_ports.zipWithIndex){
           input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
         }
+        val that_mod = that.asInstanceOf[BaseModule]
+        Builder.currentModule.get.simpleChiselConnectionMap(this.simpleChiselSubModuleTrackingId)._2 += 
+          that_mod.simpleChiselSubModuleTrackingId
         this.ctrl >>> that.ctrl
+
         that
     }
 
@@ -197,6 +300,7 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
       for((input_port, idx) <- input_ports.zipWithIndex){
         input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
       }
+      that.from_module = Some(this.simpleChiselSubModuleTrackingId)
       that
   }
 }

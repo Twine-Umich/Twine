@@ -1,15 +1,13 @@
 // See LICENSE for license details.
 
-import collection.mutable.Queue
 package chisel3
 
+import collection.mutable.Queue
+
 import scala.collection.immutable.ListMap
-import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.collection.mutable.{ListBuffer, HashMap, StringBuilder, ArrayBuffer}
 import scala.collection.JavaConversions._
 import scala.language.experimental.macros
-
-import java.util.IdentityHashMap
-
 import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
@@ -19,7 +17,9 @@ import chisel3.internal.sourceinfo.InstTransform
 import chisel3.experimental.BaseModule
 import _root_.firrtl.annotations.{ModuleName, ModuleTarget, IsModule}
 import scala.collection.mutable.HashMap
-import scala.collection.mutable.ArrayBuffer
+import chisel3.simplechisel._
+import chisel3.internal.firrtl.PrimOp._
+import scala.util.control.Breaks._
 
 object Module extends SourceInfoDoc {
   /** A wrapper method that all Module instantiations must be wrapped in
@@ -35,6 +35,7 @@ object Module extends SourceInfoDoc {
   def do_apply[T <: BaseModule](bc: => T)
                                (implicit sourceInfo: SourceInfo,
                                          compileOptions: CompileOptions): T = {
+    Console.println("Entered module \n\n")
     if (Builder.readyForModuleConstr) {
       throwException("Error: Called Module() twice without instantiating a Module." +
                      sourceInfo.makeMessage(" See " + _))
@@ -64,22 +65,838 @@ object Module extends SourceInfoDoc {
                      "This is probably due to rewrapping a Module instance with Module()." +
                      sourceInfo.makeMessage(" See " + _))
     }
+
+    module match {
+      case m:SimpleChiselModuleInternal =>{
+         val md = module.asInstanceOf[SimpleChiselModuleInternal]
+         md.generateSimpleChiselComponent
+        }
+      case _ =>()
+    }
+
+    Console.println(s"cmap:${module.simpleChiselConnectionMap}")
+    module match{
+      case bm:SimpleChiselModuleTrait =>{
+        generateSimpleChiselConnection(module)
+      }
+      case _ =>()
+    }
+
     Builder.currentModule = parent // Back to parent!
     Builder.whenDepth = whenDepth
     Builder.currentClock = saveClock   // Back to clock and reset scope
     Builder.currentReset = saveReset
 
-    val component = module.generateComponent()
+    var component = module.generateComponent()
 
+    parent match{
+      case Some(m) => {
+        module match{
+          case s:SimpleChiselModuleTrait =>{
+            val scm = module.asInstanceOf[SimpleChiselModuleTrait]
+            m.simpleChiselConnectionMap += ((scm, new ArrayBuffer[Int]()))
+            val bm = module.asInstanceOf[BaseModule]
+            bm.simpleChiselSubModuleTrackingId = m.simpleChiselConnectionMap.size - 1
+          }
+          case _ =>()
+        }
+      }
+      case None => ()
+    }
+  
+    simpleChiselCtrlCheck(component)
+    Builder.components += component
+
+    // Handle connections at enclosing scope
+    if(!Builder.currentModule.isEmpty) {
+      pushCommand(DefInstance(sourceInfo, module, component.ports))
+      module.initializeInParent(compileOptions)
+    }
+    Console.println(s"left module \n\n")
+    module
+  }
+
+  /** Returns the implicit Clock */
+  def clock: Clock = Builder.forcedClock
+  /** Returns the implicit Reset */
+  def reset: Reset = Builder.forcedReset
+  /** Returns the current Module */
+  def currentModule: Option[BaseModule] = Builder.currentModule
+
+  def generateSimpleChiselConnection(m: BaseModule)(implicit sourceInfo: SourceInfo,
+                                         compileOptions: CompileOptions): Any = {
+    m match{
+      case _: RawModule => ()
+      case _ => {return ()}
+    }
+    val bm = m.asInstanceOf[RawModule]
+    val m_as_scm = m.asInstanceOf[SimpleChiselModuleTrait]
+    // easiest thing to do: connect clear bit
+    m_as_scm.ctrl match {
+      case ctrl_io: TightlyCoupledIOCtrlInternal =>{
+        val scm_ctrl_io = m_as_scm.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+        for((m,i)<- bm.simpleChiselConnectionMap){
+          m.ctrl match{
+            case sub_ctrl_io: TightlyCoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: ValidIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[ValidIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: DecoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[DecoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: OutOfOrderIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[OutOfOrderIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case _ =>()
+          }
+        }
+      }
+      case ctrl_io: ValidIOCtrlInternal =>{
+        val scm_ctrl_io = m_as_scm.ctrl.asInstanceOf[ValidIOCtrlInternal]
+        for((m,i)<- bm.simpleChiselConnectionMap){
+        m.ctrl match{
+            case sub_ctrl_io: TightlyCoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: ValidIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[ValidIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: DecoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[DecoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: OutOfOrderIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[OutOfOrderIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case _ =>()
+          }
+        }
+      }
+      case ctrl_io: DecoupledIOCtrlInternal =>{
+        val scm_ctrl_io = m_as_scm.ctrl.asInstanceOf[DecoupledIOCtrlInternal]
+        for((m,i)<- bm.simpleChiselConnectionMap){
+        m.ctrl match{
+            case sub_ctrl_io: TightlyCoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: ValidIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[ValidIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: DecoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[DecoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: OutOfOrderIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[OutOfOrderIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case _ =>()
+          }
+        }
+      }
+      case ctrl_io: OutOfOrderIOCtrlInternal =>{
+        val scm_ctrl_io = m_as_scm.ctrl.asInstanceOf[OutOfOrderIOCtrlInternal]
+        for((m,i)<- bm.simpleChiselConnectionMap){
+        m.ctrl match{
+            case sub_ctrl_io: TightlyCoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: ValidIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[ValidIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: DecoupledIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[DecoupledIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case sub_ctrl_io: OutOfOrderIOCtrlInternal =>{
+              val sub_scm_ctrl_io = m.ctrl.asInstanceOf[OutOfOrderIOCtrlInternal]
+              var found_previous_connection = false
+              breakable{
+                for((command,idx) <- bm._commands.zipWithIndex){
+                  command match{
+                    case c:Connect => {
+                      if(c.loc.name == sub_scm_ctrl_io.clear.getRef.name){
+                        val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, scm_ctrl_io.clear.ref))
+                        MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, orOpResult, bm)
+                        found_previous_connection = true
+                        bm._commands.remove(idx)
+                        break
+                      }
+                    }
+                    case _ =>()
+                  }
+                }
+              }
+              if(!found_previous_connection){
+                MonoConnect.connect(sourceInfo, compileOptions, sub_scm_ctrl_io.clear, scm_ctrl_io.clear, bm)
+              }
+            }
+            case _ =>()
+          }
+        }
+      }
+      case _ =>()
+    }
+
+    // put all instantiation to the beginning of the module
+    var new_commands = ArrayBuffer[Command]()
+    var num_of_instance = 0
+    for(cmd <- bm._commands){
+      cmd match{
+        case c: DefInstance =>{
+          new_commands.prepend(cmd)
+          num_of_instance += 1
+        }
+        case _ =>{
+          new_commands.append(cmd)
+        }
+      }
+    }
+    bm._commands = new_commands
+
+    m_as_scm.ctrl.to_module match{ // TODO: Cross-level
+      case Some(n_m) =>{
+        m_as_scm.ctrl match{
+          case ctrl: TightlyCoupledIOCtrlInternal => ()
+          case ctrl: ValidIOCtrlInternal => ()
+          case ctrl: DecoupledIOCtrlInternal => ()
+          case ctrl: OutOfOrderIOCtrlInternal => ()
+          case _ => ()
+        }
+      }
+      case None =>
+    }
+
+    var next_idx = -1
+    val tightlyCoupledRegion = new ArrayBuffer[SimpleChiselModuleTrait]()
+    var hasValidIO = false
+    var last_idx = -1
+    var connectionMap = bm.simpleChiselConnectionMap.clone
+    breakable{ // same level
+      while(true){
+        last_idx = -1
+        next_idx = -1
+        breakable{
+          for(((scm, path),idx) <- connectionMap.zipWithIndex){
+            if(path.size!= 0){
+              next_idx = idx
+            }
+          }
+        }
+        if(next_idx == -1){
+          break
+        }
+        breakable{
+          while(true){
+            val scm = connectionMap(next_idx)._1
+            scm.ctrl match{
+              case ctrl: TightlyCoupledIOCtrlInternal =>{
+                tightlyCoupledRegion += scm
+                if(last_idx != -1){
+                  connectionMap(last_idx)._2.remove(0)
+                }
+                last_idx = next_idx
+                if(!connectionMap(next_idx)._2.isEmpty){
+                  next_idx = connectionMap(next_idx)._2(0)
+                }else{
+                  break
+                }
+              }
+              case ctrl: ValidIOCtrlInternal => {
+                hasValidIO = true
+                tightlyCoupledRegion += scm
+                if(last_idx != -1){
+                  connectionMap(last_idx)._2.remove(0)
+                }
+                last_idx = next_idx
+                if(!connectionMap(next_idx)._2.isEmpty){
+                  next_idx = connectionMap(next_idx)._2(0)
+                }else{
+                  break
+                }
+              }
+              case ctrl: DecoupledIOCtrlInternal => {
+                if(last_idx == -1){
+                  connectionMap(next_idx)._2.remove(0)
+                }else{
+                  if(!connectionMap(next_idx)._2.isEmpty){
+                    connectionMap(next_idx)._2.remove(0)
+                  }
+                  connectionMap(last_idx)._2.remove(0)
+                }
+                break
+              }
+              case ctrl: OutOfOrderIOCtrlInternal => {
+                if(last_idx == -1){
+                  connectionMap(next_idx)._2.remove(0)
+                }else{
+                  if(!connectionMap(next_idx)._2.isEmpty){
+                    connectionMap(next_idx)._2.remove(0)
+                  }
+                  connectionMap(last_idx)._2.remove(0)
+                }
+                break              
+              }
+              case _ => {
+                if(last_idx == -1){
+                  connectionMap(next_idx)._2.remove(0)
+                }else{
+                  if(!connectionMap(next_idx)._2.isEmpty){
+                    connectionMap(next_idx)._2.remove(0)
+                  }
+                  connectionMap(last_idx)._2.remove(0)
+                }
+                break 
+              }
+            }
+          }
+        }
+        if(hasValidIO){
+          // Tackle stuck
+          val arrayOfStuck = new ArrayBuffer[Bool]
+          for((t,j)<- tightlyCoupledRegion.zipWithIndex){
+            var last = false.B
+            for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+              if(i>j){
+                m.ctrl match{
+                  case tcIO: TightlyCoupledIOCtrlInternal =>{
+                    last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, tcIO.stuck.ref), num_of_instance)
+                    num_of_instance += 1
+                  }
+                  case validIO: ValidIOCtrlInternal =>{
+                    last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, validIO.stuck.ref), num_of_instance)   
+                    num_of_instance += 1
+                  }
+                  case _ =>()
+                }
+              }
+            }
+            arrayOfStuck += last
+          }
+          var last = false.B
+          for(b <- arrayOfStuck){
+            last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, b.ref), num_of_instance)
+          }
+          for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+            val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+            for((cmd,j) <- bm._commands.zipWithIndex){
+              cmd match{
+                case c:DefPrim[_] =>{
+                  val command = cmd.asInstanceOf[DefPrim[_]]
+                  val arg_buf = new ArrayBuffer[Arg]
+                  for(arg<- command.args){
+                    if(arg.name == ctrl.stuck.ref.name){
+                      arg_buf += last.ref
+                    }else{
+                      arg_buf += arg
+                    }
+                  } //TODO: fix this
+                  // bm._commands.update(j, DefPrim(command.sourceInfo,command.id, command.op, arg_buf.toSeq:_*))
+                }
+                case c:Connect =>{
+                  val command = cmd.asInstanceOf[Connect]
+                    if(command.exp.name == ctrl.stuck.ref.name){
+                      command.exp = last.ref
+                    }
+                }
+                case _ => ()
+              }
+            }
+          }
+          // Tackle stall
+          val arrayOfStall = new ArrayBuffer[Bool]
+          for((t,j)<- tightlyCoupledRegion.zipWithIndex){
+            var last = false.B
+            for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+              if(i>j){
+                m.ctrl match{
+                  case tcIO: TightlyCoupledIOCtrlInternal =>{
+                    for((cmd,j) <- bm._commands.zipWithIndex){
+                      cmd match{
+                        case c:Connect =>{
+                          val command = cmd.asInstanceOf[Connect]
+                          if(command.loc.name == tcIO.stall.ref.name){
+                            last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, command.exp), num_of_instance)   
+                            num_of_instance += 1
+                          }
+                        }
+                        case _ => ()
+                      }
+                    }                    
+                  }
+                  case validIO: ValidIOCtrlInternal =>{
+                    for((cmd,j) <- bm._commands.zipWithIndex){
+                      cmd match{
+                        case c:Connect =>{
+                          val command = cmd.asInstanceOf[Connect]
+                          if(command.loc.name == validIO.stall.ref.name){
+                            last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, command.exp), num_of_instance)   
+                            num_of_instance += 1
+                          }
+                        }
+                        case _ => ()
+                      }
+                    }          
+                  }
+                  case _ =>()
+                }
+              }
+            }
+            arrayOfStall += last
+          }
+          for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+            var found_previous_connection = false
+            var command_idx = 0
+            val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+            last = pushOp(DefPrim(sourceInfo,Bool(), BitOrOp, arrayOfStall(i).ref,arrayOfStuck(i).ref))
+            for((cmd,j) <- bm._commands.zipWithIndex){
+              cmd match{
+                case c:DefPrim[_] =>{
+                  val command = cmd.asInstanceOf[DefPrim[_]]
+                  val arg_buf = new ArrayBuffer[Arg]
+                  for(arg<- command.args){
+                    if(arg.name == ctrl.stall.ref.name){
+                      arg_buf += last.ref
+                    }else{
+                      arg_buf += arg
+                    }
+                  } //TODO: fix this
+                  // bm._commands.update(j, DefPrim(command.sourceInfo,command.id, command.op, arg_buf.toSeq:_*))
+                }
+                case c:Connect =>{
+                  val command = cmd.asInstanceOf[Connect]
+                  if(command.loc.name == ctrl.stall.ref.name){
+                    val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, command.exp, last.ref))
+                    MonoConnect.connect(sourceInfo, compileOptions, ctrl.stall, orOpResult, bm)
+                    found_previous_connection = true
+                    command_idx = j
+                  }
+                }
+                case _ => ()
+              }
+            }
+            if(!found_previous_connection){
+              MonoConnect.connect(sourceInfo, compileOptions, ctrl.stall, last, bm)
+            }else{
+              bm._commands.remove(command_idx)
+            }
+          }
+        }else{
+          // Tackle stuck
+          val arrayOfStuck = new ArrayBuffer[Bool]
+          for((t,j)<- tightlyCoupledRegion.zipWithIndex){
+            var last = false.B
+            for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+              val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+              if(i!=j){
+                last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, ctrl.clear.ref), num_of_instance)
+                num_of_instance += 1
+              }
+            }
+            arrayOfStuck += last
+          }
+          var last = false.B
+          for(b <- arrayOfStuck){
+            last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, b.ref), num_of_instance)
+          }
+          for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+            val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+            for((cmd,j) <- bm._commands.zipWithIndex){
+              cmd match{
+                case c:DefPrim[_] =>{
+                  val command = cmd.asInstanceOf[DefPrim[_]]
+                  val arg_buf = new ArrayBuffer[Arg]
+                  for(arg<- command.args){
+                    if(arg.name == ctrl.stuck.ref.name){
+                      arg_buf += last.ref
+                    }else{
+                      arg_buf += arg
+                    }
+                  } //TODO: fix this
+                  // bm._commands.update(j, DefPrim(command.sourceInfo,command.id, command.op, arg_buf.toSeq:_*))
+                }
+                case c:Connect =>{
+                  val command = cmd.asInstanceOf[Connect]
+                    if(command.exp.name == ctrl.stuck.ref.name){
+                      command.exp = last.ref
+                    }
+                }
+                case _ => ()
+              }
+            }
+          }
+          // Tackle stall
+          val arrayOfStall = new ArrayBuffer[Bool]
+          for((t,j)<- tightlyCoupledRegion.zipWithIndex){
+            var last = false.B
+            for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+              val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+              if(i!=j){
+                for((cmd,j) <- bm._commands.zipWithIndex){
+                  cmd match{
+                    case c:Connect =>{
+                      val command = cmd.asInstanceOf[Connect]
+                      if(command.loc.name == ctrl.stall.ref.name){
+                        last = insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, last.ref, command.exp), num_of_instance)   
+                        num_of_instance += 1
+                      }
+                    }
+                    case _ => ()
+                  }
+                }                        
+              }
+            }
+            arrayOfStall += last
+          }
+          for((m, i)<- tightlyCoupledRegion.zipWithIndex){
+            var found_previous_connection = false
+            var command_idx = 0
+            val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
+            last = pushOp(DefPrim(sourceInfo,Bool(), BitOrOp, arrayOfStall(i).ref,arrayOfStuck(i).ref))
+            for((cmd,j) <- bm._commands.zipWithIndex){
+              cmd match{
+                case c:DefPrim[_] =>{
+                  val command = cmd.asInstanceOf[DefPrim[_]]
+                  val arg_buf = new ArrayBuffer[Arg]
+                  for(arg<- command.args){
+                    if(arg.name == ctrl.stall.ref.name){
+                      arg_buf += last.ref
+                    }else{
+                      arg_buf += arg
+                    }
+                  } //TODO: fix this
+                  // bm._commands.update(j, DefPrim(command.sourceInfo,command.id, command.op, arg_buf.toSeq:_*))
+                }
+                case c:Connect =>{
+                  val command = cmd.asInstanceOf[Connect]
+                  if(command.loc.name == ctrl.stall.ref.name){
+                    val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, command.exp, last.ref))
+                    MonoConnect.connect(sourceInfo, compileOptions, ctrl.stall, orOpResult, bm)
+                    found_previous_connection = true
+                    command_idx = j
+                  }
+                }
+                case _ => ()
+              }
+            }
+            if(!found_previous_connection){
+              MonoConnect.connect(sourceInfo, compileOptions, ctrl.stall, last, bm)
+            }else{
+              bm._commands.remove(command_idx)
+            }
+          }
+        }
+      }
+    }
+  }
+  def simpleChiselCtrlCheck(component: Component): Component = {
     val hashMap: HashMap[String, Int] = new HashMap()
-    val lists: ArrayBuffer[ArrayBuffer[Int]] = new ArrayBuffer[ArrayBuffer[Int]]
+    val lists: ListBuffer[ListBuffer[Int]] = new ListBuffer[ListBuffer[Int]]
     component match{
       case d:DefModule =>{
         def traversePort(elt: Data):Any = elt match {
             case data: Vec[_] => {
                 for(e <- data.getElements){
                   if(!hashMap.contains(s"${e.getRef.fullName(d)}")){
-                    lists += new ArrayBuffer[Int]()
+                    lists += new ListBuffer[Int]()
                     hashMap += (s"${e.getRef.fullName(d)}" -> (lists.size - 1))
                   }
                 }
@@ -91,95 +908,105 @@ object Module extends SourceInfoDoc {
             }
             case _ =>{
               if(!hashMap.contains(s"${elt.getRef.fullName(d)}")){
-                lists += new ArrayBuffer[Int]()
+                lists += new ListBuffer[Int]()
                 hashMap += (s"${elt.getRef.fullName(d)}" -> (lists.size - 1))
               }
             }
         }
         def addName(name: String): String = {
           if(!hashMap.contains(name)){
-            lists += new ArrayBuffer[Int]()
+            lists += new ListBuffer[Int]()
             hashMap += (name -> (lists.size - 1))
           }
           name
         }
 
 
-    var visited: Map[Int, Boolean] = Map()
-    var parent: Map[Int, Int] = Map()
+        var visited: Map[Int, Boolean] = Map()
+        var parent: Map[Int, Int] = Map()
 
-    def backtracePath(start: Int, end: Int): List[Int] = {
-      val p = parent(end)
-      if (p == -1) return List(start)
+        def backtracePath(start: Int, end: Int): ListBuffer[Int] = {
+          val p = parent(end)
+          if (p == -1) return ListBuffer(start)
 
-      return backtracePath(start, p) ::: List(end)
-    }
+          return (backtracePath(start, p) ++ ListBuffer(end))
+        }
 
-    def findPath(
-        graph: List[List[Int]],
-        start: Int,
-        end: Int
-    ): Option[List[Int]] = {
+        def findPath( graph: ListBuffer[ListBuffer[Int]], start: Int, end: Int): Option[ListBuffer[Int]] = {
+          val queue = Queue[Int]()
 
-      val queue = Queue[Int]()
+          for (i <- 0 to graph.length) {
+            visited += (i -> false)
+          }
+          queue.enqueue(start)
+          parent += (start -> -1)
 
-      for (i <- 0 to graph.length) {
-        visited += (i -> false)
-      }
-      queue.enqueue(start)
-      parent += (start -> -1)
+          while (queue.nonEmpty) {
+            val node = queue.dequeue()
+            if (node == end) return Some(backtracePath(start, end))
+            if (!visited(node)) {
+              visited += (node -> true)
+              for (neighbor <- graph(node)) {
+                parent += (neighbor -> node)
+                queue.enqueue(neighbor)
+              }
 
-      while (queue.nonEmpty) {
-        val node = queue.dequeue()
-        if (node == end) return Some(backtracePath(start, end))
-        if (!visited(node)) {
-          visited += (node -> true)
-          for (neighbor <- graph(node)) {
-            parent += (neighbor -> node)
-            queue.enqueue(neighbor)
+            }
           }
 
+          return None
         }
-      }
-
-      return None
-
-    }
-
+        var pos_of_valid_in = 0
+        var pos_of_valid_out = 0
+        var pos_of_ready_in = 0
+        var pos_of_ready_out = 0
+        var continue = false
         for(port <- d.ports){
           port.id match {
             case ctrl: DecoupledIOCtrlInternal =>{
-              lists += new ArrayBuffer[Int]()
+              continue = true
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.in.valid.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_valid_in = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.in.ready.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_ready_in = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.out.valid.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_valid_out = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_ready_out = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.clear.getRef.fullName(d)}" -> (lists.size - 1))
             }
             case ctrl: OutOfOrderIOCtrlInternal =>{
-              lists += new ArrayBuffer[Int]()
+              continue = true
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.in.valid.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_valid_in = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.in.ready.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_ready_in = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.out.valid.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_valid_out = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              pos_of_ready_out = (lists.size - 1)
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.clear.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.in.ticket_num.getRef.fullName(d)}" -> (lists.size - 1))
-              lists += new ArrayBuffer[Int]()
+              lists += new ListBuffer[Int]()
               hashMap += (s"${ctrl.out.ticket_num.getRef.fullName(d)}" -> (lists.size - 1))
             }
             case _ => traversePort(port.id)
           }
         }
-
+        if(!continue){
+          return component
+        }
         for(command <- d.commands){
           command match{
             case wire:DefWire =>{
@@ -212,7 +1039,7 @@ object Module extends SourceInfoDoc {
                   }
                 }
             }
-            case connect: ConnectInit =>{
+            case connect:ConnectInit =>{
                 if(hashMap.contains(connect.exp.fullName(d))){
                   if(hashMap.contains(connect.loc.fullName(d))){
                     val idx_of_dest = hashMap(connect.loc.fullName(d))
@@ -220,33 +1047,49 @@ object Module extends SourceInfoDoc {
                   }
                 }
             }
-            //TODO: handle bulk connect
             case connect: BulkConnect => ()
             case _ =>()
           }
         }
+        val driving_conditional_args = new ListBuffer[Int]()
+        for(command <- d.commands){
+          command match{
+            case w: WhenBegin => {driving_conditional_args += hashMap(w.pred.fullName(d))}
+            case w: WhenEnd => {if(!w.hasAlt) driving_conditional_args.clear}
+            case o: OtherwiseEnd => driving_conditional_args.clear
+            case c: ConnectInit => {
+              if(hashMap.contains(c.loc.fullName(d))){
+                lists(hashMap(c.loc.fullName(d))) ++= driving_conditional_args
+              }
+            }
+            case c: Connect => {
+              if(hashMap.contains(c.loc.fullName(d))){
+                lists(hashMap(c.loc.fullName(d)))  ++= driving_conditional_args
+              }
+            }
+            case defP: DefPrim[_] => lists(hashMap(defP.id.getRef.fullName(d)))  ++= driving_conditional_args
+            case _ =>()
+          }
+        }
 
+        findPath(lists, pos_of_valid_in,pos_of_ready_in) match{
+          case Some(list) =>{
+            //TODO: change to throw expection
+            Console.println("Violation found")
+          }
+          case None =>()
+        }
+        findPath(lists, pos_of_ready_out,pos_of_valid_out) match{
+          case Some(list)=>{
+            //TODO: change to throw expection
+            Console.println("Violation found")
+          }
+          case None =>()
+        }
       }
     }
-
-    //TODO: Yonathan's algorithm
-
-    Builder.components += component
-
-    // Handle connections at enclosing scope
-    if(!Builder.currentModule.isEmpty) {
-      pushCommand(DefInstance(sourceInfo, module, component.ports))
-      module.initializeInParent(compileOptions)
-    }
-    module
+    component
   }
-
-  /** Returns the implicit Clock */
-  def clock: Clock = Builder.forcedClock
-  /** Returns the implicit Reset */
-  def reset: Reset = Builder.forcedReset
-  /** Returns the current Module */
-  def currentModule: Option[BaseModule] = Builder.currentModule
 }
 
 package experimental {
@@ -322,6 +1165,9 @@ package experimental {
     */
   // TODO: seal this?
   abstract class BaseModule extends HasId {
+    // ArrayBuffer for simpleChisel
+    val simpleChiselConnectionMap = new ListBuffer[(SimpleChiselModuleTrait,ArrayBuffer[Int])]
+    var simpleChiselSubModuleTrackingId = 0
     //
     // Builder Internals - this tracks which Module RTL construction belongs to.
     //

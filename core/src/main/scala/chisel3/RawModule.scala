@@ -21,10 +21,14 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions)
   //
   // RTL construction internals
   //
-  private val _commands = ArrayBuffer[Command]()
+  var _commands = ArrayBuffer[Command]()
   private[chisel3] def addCommand(c: Command) {
     require(!_closed, "Can't write to module after module close")
     _commands += c
+  }
+  private[chisel3] def insertCommand(c: Command, pos:Int) {
+    require(!_closed, "Can't write to module after module close")
+    _commands.insert(pos,c)
   }
   protected def getCommands = {
     require(_closed, "Can't get commands before module close")

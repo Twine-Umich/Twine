@@ -21,6 +21,9 @@ class AliasedAggregateFieldException(message: String) extends ChiselException(me
   * of) other Data objects.
   */
 sealed abstract class Aggregate extends Data {
+  var to_module: Option[Int] = None
+  var from_module: Option[Int] = None
+
   private[chisel3] override def bind(target: Binding, parentDirection: SpecifiedDirection) { // scalastyle:ignore cyclomatic.complexity line.size.limit
     binding = target
 
@@ -64,6 +67,15 @@ sealed abstract class Aggregate extends Data {
     }
     for((input_port, idx) <- input_ports.zipWithIndex){
       input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
+    }
+    val that_mod = that.asInstanceOf[BaseModule]
+    this.to_module = Some(that_mod.simpleChiselSubModuleTrackingId)
+    this.from_module match{
+      case Some(id) =>{
+        Builder.currentModule.get.simpleChiselConnectionMap(id)._2 += 
+          that_mod.simpleChiselSubModuleTrackingId
+      }
+      case None => ()
     }
     that
   }
@@ -501,6 +513,7 @@ trait VecLike[T <: Data] extends collection.IndexedSeq[T] with HasId with Source
   * RTL writers should use [[Bundle]].  See [[Record#elements]] for an example.
   */
 abstract class Record(private[chisel3] implicit val compileOptions: CompileOptions) extends Aggregate {
+
   private[chisel3] override def bind(target: Binding, parentDirection: SpecifiedDirection): Unit = {
     try {
       super.bind(target, parentDirection)
