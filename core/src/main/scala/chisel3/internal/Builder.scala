@@ -208,7 +208,7 @@ private[chisel3] class DynamicContext() {
   val components = ArrayBuffer[Component]()
   val annotations = ArrayBuffer[ChiselAnnotation]()
   var currentModule: Option[BaseModule] = None
-
+  var uniqueId: BigInt = 0
   /** Contains a mapping from a elaborated module to their aspect
     * Set by [[ModuleAspect]]
     */
@@ -268,6 +268,15 @@ private[chisel3] object Builder {
   def currentModule_=(target: Option[BaseModule]): Unit = {
     dynamicContext.currentModule = target
   }
+
+  def uniqueId: BigInt = dynamicContextVar.value match {
+    case Some(dyanmicContext) => {
+      dyanmicContext.uniqueId += 1
+      dynamicContext.uniqueId
+    }
+    case _ => BigInt(0)
+  }
+
   def aspectModule(module: BaseModule): Option[BaseModule] = dynamicContextVar.value match {
     case Some(dynamicContext) => dynamicContext.aspectModule.get(module)
     case _ => None

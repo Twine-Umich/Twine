@@ -68,6 +68,7 @@ object PrimOp {
 abstract class Arg {
   def fullName(ctx: Component): String = name
   def name: String
+  def uniqueId: BigInt = Builder.uniqueId
 }
 
 case class Node(id: HasId) extends Arg {
