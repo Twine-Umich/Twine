@@ -8,7 +8,7 @@ import chisel3.internal._
 import chisel3.internal.firrtl._
 import chisel3.experimental._ 
 import chisel3.internal.sourceinfo._
-
+import chisel3.util._
 /** Abstract base class for SimpleChiselState, which only contains basic sequential blocks.
   * These may contain both logic and state which are written in the Module
   * body (constructor).

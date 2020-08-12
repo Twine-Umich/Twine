@@ -94,7 +94,7 @@ abstract trait ValidIOCtrlInternal extends SimpleChiselIOCtrlInternal{
 
 abstract trait DecoupledIOCtrlInternal extends SimpleChiselIOCtrlInternal{
     def size_of_receiving_buffer: Int
-    def size_of_sneding_buffer: Int
+    def size_of_sending_buffer: Int
     def in: DecoupledInterfaceInternal
     def out: DecoupledInterfaceInternal
 }
