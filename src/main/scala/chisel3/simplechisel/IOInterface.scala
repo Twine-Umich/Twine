@@ -10,13 +10,12 @@ import chisel3.internal._
 import chisel3.internal.firrtl._
 import chisel3.internal.sourceinfo._
 
-abstract class SimpleChiselIOCtrl extends Bundle with SimpleChiselIOCtrlInternal{
+abstract class SimpleChiselIOCtrl extends Bundle{
   def simpleConnect(that: SimpleChiselIOCtrl): SimpleChiselIOCtrl
   override def >>> (that: Aggregate)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): Aggregate = {
       that match{
           case d:SimpleChiselIOCtrl =>{
-              val ctrlIO = that.asInstanceOf[SimpleChiselIOCtrl]
-              this.simpleConnect(ctrlIO)
+              this.simpleConnect(d)
           }
           case _ => throwException(s"SimpleChiselIOCtrl can only be connected to SimpleChiselIOCtrl")
       }
@@ -70,10 +69,10 @@ class TightlyCoupledIOCtrl(val num_of_cycles: Int) extends  SimpleChiselIOCtrl w
                 val ctrlIO = that.asInstanceOf[NoIOCtrl]
             }
             case d:TightlyCoupledIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
+                d.valid_input := this.valid_output
             }
             case d:ValidIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[ValidIOCtrl]
+                d.in.valid := this.valid_output
             }
             case d:DecoupledIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[DecoupledIOCtrl]
@@ -108,26 +107,23 @@ class ValidIOCtrl extends  SimpleChiselIOCtrl with ValidIOCtrlInternal{
                 val ctrlIO = that.asInstanceOf[NoIOCtrl]
             }
             case d:TightlyCoupledIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
+                d.valid_input := this.out.valid
             }
             case d:ValidIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[ValidIOCtrl]
-                ctrlIO.in.valid := this.out.valid
+                d.in.valid := this.out.valid
             }
             case d:DecoupledIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[DecoupledIOCtrl]
-                ctrlIO.in.valid := this.out.valid
+                d.in.valid := this.out.valid
             }
             case d:OutOfOrderIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
-                ctrlIO.in.valid := this.out.valid
+                d.in.valid := this.out.valid
             }
         }
         that
     }
 }
 
-class DecoupledIOCtrl extends SimpleChiselIOCtrl with  DecoupledIOCtrlInternal {
+class DecoupledIOCtrl(val size_of_receiving_buffer: Int, val size_of_sending_buffer: Int) extends SimpleChiselIOCtrl with  DecoupledIOCtrlInternal {
     val in = new DecoupledInterface
     val out = Flipped(new DecoupledInterface)
     val clear = Input(Bool())
@@ -144,22 +140,19 @@ class DecoupledIOCtrl extends SimpleChiselIOCtrl with  DecoupledIOCtrlInternal {
                 val ctrlIO = that.asInstanceOf[NoIOCtrl]
             }
             case d:TightlyCoupledIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
+                d.valid_input := this.out.valid
             }
             case d:ValidIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[ValidIOCtrl]
-                ctrlIO.in.valid := this.out.valid
+                d.in.valid := this.out.valid
             }
             case d:DecoupledIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[DecoupledIOCtrl]
-                this.out.ready := ctrlIO.in.ready
-                ctrlIO.in.valid := this.out.valid
+                this.out.ready := d.in.ready
+                d.in.valid := this.out.valid
             }
             case d:OutOfOrderIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
-                this.out.ready := ctrlIO.in.ready
-                ctrlIO.in.valid := this.out.valid
-                ctrlIO.in.ticket_num := DontCare
+                this.out.ready := d.in.ready
+                d.in.valid := this.out.valid
+                d.in.ticket_num := DontCare
             }
         }
         that
@@ -182,22 +175,19 @@ class OutOfOrderIOCtrl(val size_of_reorder_buffer: Int) extends SimpleChiselIOCt
                 val ctrlIO = that.asInstanceOf[NoIOCtrl]
             }
             case d:TightlyCoupledIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[TightlyCoupledIOCtrl]
+                d.valid_input := this.out.valid
             }
             case d:ValidIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[ValidIOCtrl]
-                ctrlIO.in.valid := this.out.valid
+                d.in.valid := this.out.valid
             }
             case d:DecoupledIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[DecoupledIOCtrl]
-                this.out.ready := ctrlIO.in.ready
-                ctrlIO.in.valid := this.out.valid
+                this.out.ready := d.in.ready
+                d.in.valid := this.out.valid
             }
             case d:OutOfOrderIOCtrl =>{
-                val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
-                this.out.ready := ctrlIO.in.ready
-                ctrlIO.in.valid := this.out.valid
-                ctrlIO.in.ticket_num := this.out.ticket_num
+                this.out.ready := d.in.ready
+                d.in.valid := this.out.valid
+                d.in.ticket_num := this.out.ticket_num
             }
         }
         that

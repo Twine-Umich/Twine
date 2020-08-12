@@ -21,8 +21,8 @@ class AliasedAggregateFieldException(message: String) extends ChiselException(me
   * of) other Data objects.
   */
 sealed abstract class Aggregate extends Data {
-  var to_module: Option[Int] = None
-  var from_module: Option[Int] = None
+  var to_module: Option[SimpleChiselModuleTrait] = None
+  var from_module: Option[SimpleChiselModuleTrait] = None
 
   private[chisel3] override def bind(target: Binding, parentDirection: SpecifiedDirection) { // scalastyle:ignore cyclomatic.complexity line.size.limit
     binding = target
@@ -68,12 +68,10 @@ sealed abstract class Aggregate extends Data {
     for((input_port, idx) <- input_ports.zipWithIndex){
       input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
     }
-    val that_mod = that.asInstanceOf[BaseModule]
-    this.to_module = Some(that_mod.simpleChiselSubModuleTrackingId)
+    this.to_module = Some(that)
     this.from_module match{
-      case Some(id) =>{
-        Builder.currentModule.get.simpleChiselConnectionMap(id)._2 += 
-          that_mod.simpleChiselSubModuleTrackingId
+      case Some(m) =>{
+        that.from_modules += m
       }
       case None => ()
     }
