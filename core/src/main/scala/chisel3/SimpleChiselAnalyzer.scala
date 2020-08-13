@@ -26,13 +26,8 @@ object SimpleChiselAnalyzer{
                         return Some(c)
                     }
                 }
-                case c:Port =>{
-                    if(c.id.ref.uniqueId.equals(id.uniqueId)){
-                        return Some(c)
-                    }
-                }
                 case c:DefInstance =>{
-                    if(c.id.ref.uniqueId.equals(id.uniqueId)){
+                    if(c.id.getRef.uniqueId.equals(id.uniqueId)){
                         return Some(c)
                     }
                 }

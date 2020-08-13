@@ -42,17 +42,17 @@ private[chisel3] object Converter {
   //   * Memoize?
   //   * Move into the Chisel IR?
   def convert(arg: Arg, ctx: Component): fir.Expression = arg match { // scalastyle:ignore cyclomatic.complexity
-    case Node(id) =>
+    case Node(id, _) =>
       convert(id.getRef, ctx)
-    case Ref(name) =>
+    case Ref(name, _) =>
       fir.Reference(name, fir.UnknownType)
-    case Slot(imm, name) =>
+    case Slot(imm, name, _) =>
       fir.SubField(convert(imm, ctx), name, fir.UnknownType)
-    case Index(imm, ILit(idx)) =>
+    case Index(imm, ILit(idx), _) =>
       fir.SubIndex(convert(imm, ctx), castToInt(idx, "Index"), fir.UnknownType)
-    case Index(imm, value) =>
+    case Index(imm, value, _) =>
       fir.SubAccess(convert(imm, ctx), convert(value, ctx), fir.UnknownType)
-    case ModuleIO(mod, name) =>
+    case ModuleIO(mod, name, _) =>
       // scalastyle:off if.brace
       if (mod eq ctx.id) fir.Reference(name, fir.UnknownType)
       else fir.SubField(fir.Reference(mod.getRef.name, fir.UnknownType), name, fir.UnknownType)

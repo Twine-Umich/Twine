@@ -4,12 +4,14 @@ import chisel3._
 import chisel3.internal._
 import chisel3.internal.firrtl._
 import chisel3.experimental._
+import scala.collection.mutable.ArrayBuffer
 
 object SimpleChiselTranformer{
     //replace lId with rId in ctx and return the new ctx
-    def replace(lId: Arg, rId: Arg, ctx: ArrayBuffer[Command]): Option[rrayBuffer[Command]] ={
+    def replace(lId: Arg, rId: Arg, ctx: ArrayBuffer[Command]): Option[ArrayBuffer[Command]] ={
         //TODO
-        return replaceWhen(lId, rId, ctx)(true)
+        //replaceWhen(lId, rId, ctx)(true)
+        return None
     }
 
     //replace lId with rId in ctx and return the new ctx

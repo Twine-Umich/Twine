@@ -65,13 +65,13 @@ object PrimOp {
   val AsAsyncResetOp = PrimOp("asAsyncReset")
 }
 
-abstract class Arg {
+abstract class Arg(in_uniqueId: Option[BigInt] = None) {
   def fullName(ctx: Component): String = name
   def name: String
-  val uniqueId: BigInt = Builder.uniqueId
+  var uniqueId: BigInt = in_uniqueId.getOrElse(Builder.uniqueId)
 }
 
-case class Node(id: HasId) extends Arg {
+case class Node(id: HasId, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId) {
   override def fullName(ctx: Component): String = id.getOptionRef match {
     case Some(arg) => arg.fullName(ctx)
     case None => id.suggestedName.getOrElse("??")
@@ -139,16 +139,16 @@ case class IntervalLit(n: BigInt, w: Width, binaryPoint: BinaryPoint) extends Li
   def minWidth: Int = 1 + n.bitLength
 }
 
-case class Ref(name: String) extends Arg
-case class ModuleIO(mod: BaseModule, name: String) extends Arg {
+case class Ref(name: String, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId)
+case class ModuleIO(mod: BaseModule, name: String, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId){
   override def fullName(ctx: Component): String =
     if (mod eq ctx.id) name else s"${mod.getRef.name}.$name"
 }
-case class Slot(imm: Node, name: String) extends Arg {
+case class Slot(imm: Node, name: String, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId){
   override def fullName(ctx: Component): String =
     if (imm.fullName(ctx).isEmpty) name else s"${imm.fullName(ctx)}.${name}"
 }
-case class Index(imm: Arg, value: Arg) extends Arg {
+case class Index(imm: Arg, value: Arg, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId){
   def name: String = s"[$value]"
   override def fullName(ctx: Component): String = s"${imm.fullName(ctx)}[${value.fullName(ctx)}]"
 }

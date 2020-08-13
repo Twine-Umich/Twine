@@ -110,14 +110,21 @@ private[chisel3] trait HasId extends InstanceId {
     if(_ref.isEmpty) {
       val candidate_name = suggested_name.getOrElse(default)
       val available_name = namespace.name(candidate_name)
-      setRef(Ref(available_name))
+      setRef(Ref(available_name, _internal_uniqueId))
+      _internal_uniqueId = Some(_ref.get.uniqueId)
     }
 
+  private var _internal_uniqueId: Option[BigInt] = None
   private var _ref: Option[Arg] = None
-  private[chisel3] def setRef(imm: Arg): Unit = _ref = Some(imm)
-  private[chisel3] def setRef(parent: HasId, name: String): Unit = setRef(Slot(Node(parent), name))
-  private[chisel3] def setRef(parent: HasId, index: Int): Unit = setRef(Index(Node(parent), ILit(index)))
-  private[chisel3] def setRef(parent: HasId, index: UInt): Unit = setRef(Index(Node(parent), index.ref))
+  private[chisel3] def setRef(imm: Arg): Unit = {
+    if(!_internal_uniqueId.isEmpty){_ref.get.uniqueId = _internal_uniqueId.get}
+    _ref = Some(imm)
+    _internal_uniqueId = Some(_ref.get.uniqueId)
+    _ref
+  }
+  private[chisel3] def setRef(parent: HasId, name: String): Unit = setRef(Slot(Node(parent), name, _internal_uniqueId))
+  private[chisel3] def setRef(parent: HasId, index: Int): Unit = setRef(Index(Node(parent), ILit(index), _internal_uniqueId))
+  private[chisel3] def setRef(parent: HasId, index: UInt): Unit = setRef(Index(Node(parent), index.ref, _internal_uniqueId))
   private[chisel3] def getRef: Arg = _ref.get
   private[chisel3] def getOptionRef: Option[Arg] = _ref
 
