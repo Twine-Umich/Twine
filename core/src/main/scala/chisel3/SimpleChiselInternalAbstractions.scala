@@ -34,8 +34,44 @@ trait SimpleChiselModuleTrait{
   * multiple IO() declarations.
   */
 abstract class SimpleChiselModuleInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends LegacyModule with SimpleChiselModuleTrait{
+    extends MultiIOModule with SimpleChiselModuleTrait{
       private[chisel3] def generateSimpleChiselComponent: Any
+      // These are to be phased out
+      protected var override_clock: Option[Clock] = None
+      protected var override_reset: Option[Bool] = None
+
+      // Allow access to bindings from the compatibility package
+      // protected def _compatIoPortBound() = portsContains(io)// scalastyle:ignore method.name
+
+      private[chisel3] override def namePorts(names: HashMap[HasId, String]): Unit = {
+        for (port <- getModulePorts) {
+          // This should already have been caught
+          if (!names.contains(port)) throwException(s"Unable to name port $port in $this")
+          val name = names(port)
+          port.setRef(ModuleIO(this, _namespace.name(name)))
+        }
+      }
+
+      private[chisel3] override def generateComponent(): Component = {
+        _compatAutoWrapPorts()  // pre-IO(...) compatibility hack
+
+        require((portsContains(clock)) && (portsContains(reset)), "Internal error, module did not have clock or reset as IO") // scalastyle:ignore line.size.limit
+
+        super.generateComponent()
+      }
+
+      private[chisel3] override def initializeInParent(parentCompileOptions: CompileOptions): Unit = {
+        // Don't generate source info referencing parents inside a module, since this interferes with
+        // module de-duplication in FIRRTL emission.
+        implicit val sourceInfo = UnlocatableSourceInfo
+
+        // if (!parentCompileOptions.explicitInvalidate) {
+        //   pushCommand(DefInvalid(sourceInfo, io.ref))
+        // }
+
+        clock := override_clock.getOrElse(Builder.forcedClock)
+        reset := override_reset.getOrElse(Builder.forcedReset)
+      }
     }
 
 /** Abstract base class for SimpleChiselState that contain Chisel RTL.

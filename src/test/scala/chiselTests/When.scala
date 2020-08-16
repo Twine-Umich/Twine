@@ -11,18 +11,18 @@ class WhenTester() extends BasicTester {
   val cnt = Counter(4)
   when(true.B) { cnt.inc() }
 
-  val out = Wire(UInt(3.W))
+  val m_out = Wire(UInt(3.W))
   when(cnt.value === 0.U) {
-    out := 1.U
+    m_out := 1.U
   } .elsewhen (cnt.value === 1.U) {
-    out := 2.U
+    m_out := 2.U
   } .elsewhen (cnt.value === 2.U) {
-    out := 3.U
+    m_out := 3.U
   } .otherwise {
-    out := 0.U
+    m_out := 0.U
   }
 
-  assert(out === cnt.value + 1.U)
+  assert(m_out === cnt.value + 1.U)
 
   when(cnt.value === 3.U) {
     stop()
@@ -33,18 +33,18 @@ class OverlappedWhenTester() extends BasicTester {
   val cnt = Counter(4)
   when(true.B) { cnt.inc() }
 
-  val out = Wire(UInt(3.W))
+  val m_out = Wire(UInt(3.W))
   when(cnt.value <= 0.U) {
-    out := 1.U
+    m_out := 1.U
   } .elsewhen (cnt.value <= 1.U) {
-    out := 2.U
+    m_out := 2.U
   } .elsewhen (cnt.value <= 2.U) {
-    out := 3.U
+    m_out := 3.U
   } .otherwise {
-    out := 0.U
+    m_out := 0.U
   }
 
-  assert(out === cnt.value + 1.U)
+  assert(m_out === cnt.value + 1.U)
 
   when(cnt.value === 3.U) {
     stop()
@@ -55,20 +55,20 @@ class NoOtherwiseOverlappedWhenTester() extends BasicTester {
   val cnt = Counter(4)
   when(true.B) { cnt.inc() }
 
-  val out = Wire(UInt(3.W))
+  val m_out = Wire(UInt(3.W))
   when(cnt.value <= 0.U) {
-    out := 1.U
+    m_out := 1.U
   } .elsewhen (cnt.value <= 1.U) {
-    out := 2.U
+    m_out := 2.U
   } .elsewhen (cnt.value <= 2.U) {
-    out := 3.U
+    m_out := 3.U
   } .elsewhen (cnt.value <= 3.U) {
-    out := 0.U
+    m_out := 0.U
   } .otherwise {
-    out := DontCare
+    m_out := DontCare
   }
 
-  assert(out === cnt.value + 1.U)
+  assert(m_out === cnt.value + 1.U)
 
   when(cnt.value === 3.U) {
     stop()

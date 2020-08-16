@@ -190,7 +190,8 @@ package internal {
     // These are to be phased out
     protected var override_clock: Option[Clock] = None
     protected var override_reset: Option[Bool] = None
-
+    def io:Record
+    
     // Allow access to bindings from the compatibility package
     // protected def _compatIoPortBound() = portsContains(io)// scalastyle:ignore method.name
 
@@ -206,7 +207,7 @@ package internal {
     private[chisel3] override def generateComponent(): Component = {
       _compatAutoWrapPorts()  // pre-IO(...) compatibility hack
 
-      // Restrict IO to just in, out, clock, and reset
+      // Restrict IO to just io, clock, and reset
       require((portsContains(clock)) && (portsContains(reset)), "Internal error, module did not have clock or reset as IO") // scalastyle:ignore line.size.limit
 
       super.generateComponent()
