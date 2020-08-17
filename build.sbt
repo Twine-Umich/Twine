@@ -37,6 +37,8 @@ lazy val commonSettings = Seq (
     Resolver.sonatypeRepo("snapshots"),
     Resolver.sonatypeRepo("releases")
   ),
+  parallelExecution in Test := false,
+  fork in Test := false,
   organization := "edu.umich.engin.eecs",
   version := "0.1-SNAPSHOT",
   autoAPIMappings := true,
