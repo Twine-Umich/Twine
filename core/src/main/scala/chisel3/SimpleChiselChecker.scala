@@ -8,7 +8,8 @@ import chisel3.internal.firrtl._
 import chisel3.simplechisel._
 import chisel3.internal.firrtl.PrimOp._
 import chisel3._
-object Checker{
+
+object SimpleChiselChecker{
 
     val lists: ListBuffer[ListBuffer[Int]] = new ListBuffer[ListBuffer[Int]]
     val hashMap:HashMap[String, Int] = new HashMap[String, Int]
