@@ -21,8 +21,8 @@ class AliasedAggregateFieldException(message: String) extends ChiselException(me
   * of) other Data objects.
   */
 sealed abstract class Aggregate extends Data {
-  var to_module: Option[chisel3.simplechisel.SimpleChiselModuleTrait] = None
-  var from_module: Option[chisel3.simplechisel.SimpleChiselModuleTrait] = None
+  var to_module: Option[SimpleChiselModuleTrait] = None
+  var from_module: Option[SimpleChiselModuleTrait] = None
 
   private[chisel3] override def bind(target: Binding, parentDirection: SpecifiedDirection) { // scalastyle:ignore cyclomatic.complexity line.size.limit
     binding = target
@@ -58,7 +58,7 @@ sealed abstract class Aggregate extends Data {
       * @param that the $coll to connect to
       * @group Connect
       */
-  def >>>[T <: chisel3.simplechisel.SimpleChiselModuleTrait](that: T)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): T = {
+  def >>>[T <: SimpleChiselModuleTrait](that: T)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): T = {
     implicit val sourceInfo = UnlocatableSourceInfo
     val input_ports = that.in.getElements
     val output_ports = this.getElements

@@ -442,14 +442,100 @@ object SimpleChiselAnalyzer{
         }
     }
 
-    def findIndirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Option[Seq[Command]] = {
-        //TODO: Implement this
-        return None
+    def findIndirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[BigInt] = {
+        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+        for(command <- ctx){
+          command match{
+            case wire:DefWire =>{
+              traverseData(wire.id, map)
+            }
+            case reg:DefReg =>{
+              traverseData(reg.id, map)
+            }
+            case reg:DefRegInit =>{
+              traverseData(reg.id, map)
+            }
+            case prim:DefPrim[_] =>{              
+              traverseData(prim.id, map)
+            }
+            case connect: BulkConnect => ()
+            case _ =>()
+          }
+        }
+        val driving_conditional_args = new ListBuffer[BigInt]()
+        for(command <- ctx){
+          command match{
+            case w: WhenBegin => {driving_conditional_args += w.pred.uniqueId}
+            case w: WhenEnd => {if(!w.hasAlt) driving_conditional_args.clear}
+            case o: OtherwiseEnd => driving_conditional_args.clear
+            case c: ConnectInit => {
+              if(map.contains(c.loc.uniqueId)){
+                map(c.loc.uniqueId) ++= driving_conditional_args
+              }
+            }
+            case c: Connect => {
+              if(map.contains(c.loc.uniqueId)){
+                map(c.loc.uniqueId)  ++= driving_conditional_args
+              }
+            }
+            case defP: DefPrim[_] => map(defP.id.getRef.uniqueId)  ++= driving_conditional_args
+            case _ =>()
+          }
+        }
+        val allDependencies = new ArrayBuffer[BigInt]
+
+        return findAllDependency(id.uniqueId, allDependencies, map).toSeq
     }
 
-    def findDirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Option[Seq[Command]] = {
-        //TODO: Implement this
-        return None
+    def findDirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[BigInt] = {
+        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+        for(command <- ctx){
+          command match{
+            case wire:DefWire =>{
+              traverseData(wire.id, map)
+            }
+            case reg:DefReg =>{
+              traverseData(reg.id, map)
+            }
+            case reg:DefRegInit =>{
+              traverseData(reg.id, map)
+              if(map.contains(reg.init.uniqueId)){
+                map(reg.id.getRef.uniqueId) += reg.init.uniqueId
+              }
+            }
+            case prim:DefPrim[_] =>{              
+              traverseData(prim.id, map)
+              val id_of_dest = prim.id.getRef.uniqueId
+              for(arg <- prim.args){
+                if(map.contains(arg.uniqueId)){
+                  map(id_of_dest) += arg.uniqueId
+                }
+              }
+            }
+            case connect:Connect =>{
+                if(map.contains(connect.exp.uniqueId)){
+                  if(map.contains(connect.loc.uniqueId)){
+                    val id_of_dest = connect.loc.uniqueId
+                    map(id_of_dest) += connect.exp.uniqueId
+                  }
+                }
+            }
+            case connect:ConnectInit =>{
+                if(map.contains(connect.exp.uniqueId)){
+                  if(map.contains(connect.loc.uniqueId)){
+                    val id_of_dest = connect.loc.uniqueId
+                    map(id_of_dest) += connect.exp.uniqueId
+                  }
+                }
+            }
+            case connect: BulkConnect => ()
+            case _ =>()
+          }
+        }
+
+        val allDependencies = new ArrayBuffer[BigInt]
+
+        return findAllDependency(id.uniqueId, allDependencies, map).toSeq
     }
 
 }

@@ -63,16 +63,16 @@ object Module extends SourceInfoDoc {
     }
 
     module match {
-      case m:chisel3.simplechisel.SimpleChiselModuleInternal =>{
+      case m:SimpleChiselModuleInternal =>{
         // Generate queue and buffers
-         val md = module.asInstanceOf[chisel3.simplechisel.SimpleChiselModuleInternal]
+         val md = module.asInstanceOf[SimpleChiselModuleInternal]
          md.generateSimpleChiselComponent
         }
       case _ =>()
     }
 
     module match{
-      case sm:chisel3.simplechisel.SimpleChiselModuleTrait =>{
+      case sm:SimpleChiselModuleTrait =>{
         // Generate necessary connection logic
         SimpleChiselConnectionGenerator.generate(module)
       }
@@ -89,7 +89,7 @@ object Module extends SourceInfoDoc {
     parent match{
       case Some(m) => {
         module match{
-          case s:chisel3.simplechisel.SimpleChiselModuleTrait =>{ 
+          case s:SimpleChiselModuleTrait =>{ 
             //If this is a SimpleChiselModule, there are auto-connection to do at the high-level
             m.simpleChiselSubModules += s
           }

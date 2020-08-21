@@ -16,8 +16,13 @@ object SimpleChiselTranformer{
 
     //replace lId with rId in ctx and return the new ctx
     def replaceWhen(lId: Arg, rId: Arg, ctx: ArrayBuffer[Command])(pred: () => Boolean): Option[ArrayBuffer[Command]] ={
-        //TODO
-        return None
+        if(pred){
+            val new_ctx = new ArrayBuffer[Command]
+            return Some(new_ctx)
+        }
+        else{
+            return Some(ctx)
+        }
     }
 
     def removeIfSafe(id: Arg, ctx: ArrayBuffer[Command]): Option[ArrayBuffer[Command]] ={
