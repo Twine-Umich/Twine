@@ -186,7 +186,7 @@ object SimpleChiselConnectionGenerator{
                                 for((command,idx) <- rm._commands.zipWithIndex){
                                     command match{
                                         case c:Connect => {
-                                            if(c.loc.name == sub_ctrl.clear.getRef.name){
+                                            if(c.loc.uniqueId == sub_ctrl.clear.getRef.uniqueId){
                                                 val orOpResult = pushOp(DefPrim(sourceInfo, Bool(), BitOrOp, c.exp, ctrl.clear.ref))
                                                 MonoConnect.connect(sourceInfo, compileOptions, sub_ctrl.clear, orOpResult, rm)
                                                 found_previous_connection = true
@@ -215,15 +215,15 @@ object SimpleChiselConnectionGenerator{
         // Count how many submodules are there, since each submodule is an instance
         var num_of_instance = 0
         for(cmd <- rm._commands){
-        cmd match{
-            case c: DefInstance =>{
-            _new_commands.prepend(cmd)
-            num_of_instance += 1
+            cmd match{
+                case c: DefInstance =>{
+                _new_commands.prepend(cmd)
+                num_of_instance += 1
+                }
+                case _ =>{
+                _new_commands.append(cmd)
+                }
             }
-            case _ =>{
-            _new_commands.append(cmd)
-            }
-        }
         }
         // Replace the original commands with the new sequence
         rm._commands = _new_commands
@@ -232,11 +232,11 @@ object SimpleChiselConnectionGenerator{
         sm.in.to_module match{ // TODO: Cross-level
             case Some(n) =>{
                 sm.ctrl match{
-                case ctrl: TightlyCoupledIOCtrlInternal => ()
-                case ctrl: ValidIOCtrlInternal => ()
-                case ctrl: DecoupledIOCtrlInternal => ()
-                case ctrl: OutOfOrderIOCtrlInternal => ()
-                case _ => ()
+                    case ctrl: TightlyCoupledIOCtrlInternal => ()
+                    case ctrl: ValidIOCtrlInternal => ()
+                    case ctrl: DecoupledIOCtrlInternal => ()
+                    case ctrl: OutOfOrderIOCtrlInternal => ()
+                    case _ => ()
                 }
             }
             case None =>
@@ -271,7 +271,7 @@ object SimpleChiselConnectionGenerator{
                             for( cmd <- rm._commands){
                                 cmd match{
                                     case c:Connect =>{
-                                        if(c.loc.name == neighbor_ctrl.stall.ref.name){
+                                        if(c.loc.uniqueId == neighbor_ctrl.stall.ref.uniqueId){
                                             if(stallBus.isEmpty){
                                                 stallBus = Some(c.exp)
                                             }else{
@@ -296,7 +296,7 @@ object SimpleChiselConnectionGenerator{
                             case c:DefPrim[_] =>{
                                 val arg_buf = new ArrayBuffer[Arg]
                                 for(arg<- c.args){
-                                    if(arg.name == ctrl.stuck.ref.name){
+                                    if(arg.uniqueId == ctrl.stuck.ref.uniqueId){
                                         arg_buf += stuckBus.get.ref
                                     }else{
                                         arg_buf += arg
@@ -305,7 +305,7 @@ object SimpleChiselConnectionGenerator{
                                 rm._commands.update(j, DefPrim(c.sourceInfo, c.id, c.op, arg_buf.toSeq:_*))
                             }
                             case c:Connect =>{
-                                if(c.exp.name == ctrl.stuck.ref.name){
+                                if(c.exp.uniqueId == ctrl.stuck.ref.uniqueId){
                                     c.exp = stuckBus.get.ref
                                 }
                             }
@@ -315,7 +315,7 @@ object SimpleChiselConnectionGenerator{
                     for( cmd <- rm._commands){
                         cmd match{
                             case c:Connect =>{
-                                if(c.loc.name == ctrl.stall.ref.name){
+                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
                                     stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stallBus.get, c.exp), num_of_instance).ref)
                                     num_of_instance += 1
                                 }
@@ -326,7 +326,7 @@ object SimpleChiselConnectionGenerator{
                     for( (cmd, j) <- rm._commands.zipWithIndex){
                         cmd match{
                             case c:Connect =>{
-                                if(c.loc.name == ctrl.stall.ref.name){
+                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
                                     rm._commands.update(j, Connect(sourceInfo, ctrl.stall.lref, stallBus.get))
                                 }
                             }
@@ -353,7 +353,7 @@ object SimpleChiselConnectionGenerator{
                             for( cmd <- rm._commands){
                                 cmd match{
                                     case c:Connect =>{
-                                        if(c.loc.name == neighbor_ctrl.stall.ref.name){
+                                        if(c.loc.uniqueId == neighbor_ctrl.stall.ref.uniqueId){
                                             if(stallBus.isEmpty){
                                                 stallBus = Some(c.exp)
                                             }else{
@@ -378,7 +378,7 @@ object SimpleChiselConnectionGenerator{
                             case c:DefPrim[_] =>{
                                 val arg_buf = new ArrayBuffer[Arg]
                                 for(arg<- c.args){
-                                    if(arg.name == ctrl.stuck.ref.name){
+                                    if(arg.uniqueId == ctrl.stuck.ref.uniqueId){
                                         arg_buf += stuckBus.get.ref
                                     }else{
                                         arg_buf += arg
@@ -387,7 +387,7 @@ object SimpleChiselConnectionGenerator{
                                 rm._commands.update(j, DefPrim(c.sourceInfo, c.id, c.op, arg_buf.toSeq:_*))
                             }
                             case c:Connect =>{
-                                if(c.exp.name == ctrl.stuck.ref.name){
+                                if(c.exp.uniqueId == ctrl.stuck.ref.uniqueId){
                                     c.exp = stuckBus.get.ref
                                 }
                             }
@@ -397,7 +397,7 @@ object SimpleChiselConnectionGenerator{
                     for( cmd <- rm._commands){
                         cmd match{
                             case c:Connect =>{
-                                if(c.loc.name == ctrl.stall.ref.name){
+                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
                                     stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stallBus.get, c.exp), num_of_instance).ref)
                                     num_of_instance += 1
                                 }
@@ -408,7 +408,7 @@ object SimpleChiselConnectionGenerator{
                     for( (cmd, j) <- rm._commands.zipWithIndex){
                         cmd match{
                             case c:Connect =>{
-                                if(c.loc.name == ctrl.stall.ref.name){
+                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
                                     rm._commands.update(j, Connect(sourceInfo, ctrl.stall.lref, stallBus.get))
                                 }
                             }

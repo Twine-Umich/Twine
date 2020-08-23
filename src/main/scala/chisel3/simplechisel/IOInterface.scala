@@ -128,7 +128,6 @@ class DecoupledIOCtrl(val size_of_receiving_buffer: Int, val size_of_sending_buf
     val out = Flipped(new DecoupledInterface)
     val clear = Input(Bool())
 
-
     /** Connect this to that $coll based on ctrl connection rules
     * https://github.com/SimpleChisel/simple-chisel-release
     *

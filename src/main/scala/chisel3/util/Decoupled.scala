@@ -212,8 +212,6 @@ class Queue[T <: Data](gen: T,
       gen
     }
   }
-  val in = IO(new Bundle() {})
-  val out = IO(new Bundle() {})
   val io = IO(new QueueIO(genType, entries))
 
   val ram = Mem(entries, genType)

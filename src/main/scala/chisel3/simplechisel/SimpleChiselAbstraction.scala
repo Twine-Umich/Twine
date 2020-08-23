@@ -47,8 +47,8 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
             }
           }
           case d:DecoupledIOCtrl =>{
-            val input_buffer = new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true)
-            val output_buffer = new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true)
+            val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true))
+            val output_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true))
           }
           case _ => ()
         }
@@ -148,6 +148,10 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
             }else{
               d.valid_output := d.valid_input
             }
+          }
+          case d:DecoupledIOCtrl =>{
+            val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true))
+            val output_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true))
           }
           case _ => ()
         }
@@ -249,6 +253,16 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
                 d.valid_output := d.valid_input
               }
             }
+          }
+          case d:DecoupledIOCtrl =>{
+            val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true))
+            val output_buffer = Module(new Queue(chiselTypeOf(this.out), d.size_of_receiving_buffer, true, true))
+            input_buffer.io.enq.valid := d.in.valid
+            d.in.ready := input_buffer.io.enq.ready
+            output_buffer.io.deq.ready := d.out.ready
+            d.out.valid :=  output_buffer.io.deq.valid
+            this.in <> input_buffer.io.enq.bits
+            this.out <> output_buffer.io.deq.bits
           }
           case _ => ()
         }
