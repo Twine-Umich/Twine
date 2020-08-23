@@ -112,8 +112,8 @@ object SimpleChiselAnalyzer{
     def traverseData(elt: Data, map:HashMap[BigInt, ListBuffer[BigInt]]):Any = elt match {
         case data: Vec[_] => {
             for(e <- data.getElements){
-                if(!map.contains(e.getRef.uniqueId)){
-                    map += (e.getRef.uniqueId ->  new ListBuffer[BigInt]())
+                if(!map.contains(e.ref.uniqueId)){
+                    map += (e.ref.uniqueId ->  new ListBuffer[BigInt]())
                 }
             }
         }
@@ -123,8 +123,8 @@ object SimpleChiselAnalyzer{
             }
         }
         case _ =>{
-            if(!map.contains(elt.getRef.uniqueId)){
-                map += (elt.getRef.uniqueId -> new ListBuffer[BigInt]())
+            if(!map.contains(elt.ref.uniqueId)){
+                map += (elt.ref.uniqueId -> new ListBuffer[BigInt]())
             }
         }
     }
@@ -138,7 +138,7 @@ object SimpleChiselAnalyzer{
             }
             case prim:DefPrim[_] =>{              
               traverseData(prim.id, map)
-              val id_of_dest = prim.id.getRef.uniqueId
+              val id_of_dest = prim.id.ref.uniqueId
               for(arg <- prim.args){
                 if(map.contains(arg.uniqueId)){
                   map(id_of_dest) += arg.uniqueId
@@ -181,7 +181,7 @@ object SimpleChiselAnalyzer{
                 map(c.loc.uniqueId)  ++= driving_conditional_args
               }
             }
-            case defP: DefPrim[_] => map(defP.id.getRef.uniqueId)  ++= driving_conditional_args
+            case defP: DefPrim[_] => map(defP.id.ref.uniqueId)  ++= driving_conditional_args
             case _ =>()
           }
         }
@@ -216,12 +216,12 @@ object SimpleChiselAnalyzer{
             case reg:DefRegInit =>{
               traverseData(reg.id, map)
               if(map.contains(reg.init.uniqueId)){
-                map(reg.id.getRef.uniqueId) += reg.init.uniqueId
+                map(reg.id.ref.uniqueId) += reg.init.uniqueId
               }
             }
             case prim:DefPrim[_] =>{              
               traverseData(prim.id, map)
-              val id_of_dest = prim.id.getRef.uniqueId
+              val id_of_dest = prim.id.ref.uniqueId
               for(arg <- prim.args){
                 if(map.contains(arg.uniqueId)){
                   map(id_of_dest) += arg.uniqueId
@@ -264,7 +264,7 @@ object SimpleChiselAnalyzer{
                 map(c.loc.uniqueId)  ++= driving_conditional_args
               }
             }
-            case defP: DefPrim[_] => map(defP.id.getRef.uniqueId)  ++= driving_conditional_args
+            case defP: DefPrim[_] => map(defP.id.ref.uniqueId)  ++= driving_conditional_args
             case _ =>()
           }
         }
@@ -286,7 +286,7 @@ object SimpleChiselAnalyzer{
               traverseData(prim.id, map)
               for(arg <- prim.args){
                 if(map.contains(arg.uniqueId)){
-                  map(arg.uniqueId) += prim.id.getRef.uniqueId
+                  map(arg.uniqueId) += prim.id.ref.uniqueId
                 }
               }
             }
@@ -334,7 +334,7 @@ object SimpleChiselAnalyzer{
             }
             case defP: DefPrim[_] =>{
               for(driving_arg <- driving_conditional_args){
-                map(driving_arg) += defP.id.getRef.uniqueId
+                map(driving_arg) += defP.id.ref.uniqueId
               }
             }
             case _ =>()
@@ -368,14 +368,14 @@ object SimpleChiselAnalyzer{
             case reg:DefRegInit =>{
               traverseData(reg.id, map)
               if(map.contains(reg.init.uniqueId)){
-                map(reg.init.uniqueId) += reg.id.getRef.uniqueId
+                map(reg.init.uniqueId) += reg.id.ref.uniqueId
               }
             }
             case prim:DefPrim[_] =>{              
               traverseData(prim.id, map)
               for(arg <- prim.args){
                 if(map.contains(arg.uniqueId)){
-                  map(arg.uniqueId) += prim.id.getRef.uniqueId
+                  map(arg.uniqueId) += prim.id.ref.uniqueId
                 }
               }
             }
@@ -423,7 +423,7 @@ object SimpleChiselAnalyzer{
             }
             case defP: DefPrim[_] =>{
               for(driving_arg <- driving_conditional_args){
-                map(driving_arg) += defP.id.getRef.uniqueId
+                map(driving_arg) += defP.id.ref.uniqueId
               }
             }
             case _ =>()
@@ -478,7 +478,7 @@ object SimpleChiselAnalyzer{
                 map(c.loc.uniqueId)  ++= driving_conditional_args
               }
             }
-            case defP: DefPrim[_] => map(defP.id.getRef.uniqueId)  ++= driving_conditional_args
+            case defP: DefPrim[_] => map(defP.id.ref.uniqueId)  ++= driving_conditional_args
             case _ =>()
           }
         }
@@ -500,12 +500,12 @@ object SimpleChiselAnalyzer{
             case reg:DefRegInit =>{
               traverseData(reg.id, map)
               if(map.contains(reg.init.uniqueId)){
-                map(reg.id.getRef.uniqueId) += reg.init.uniqueId
+                map(reg.id.ref.uniqueId) += reg.init.uniqueId
               }
             }
             case prim:DefPrim[_] =>{              
               traverseData(prim.id, map)
-              val id_of_dest = prim.id.getRef.uniqueId
+              val id_of_dest = prim.id.ref.uniqueId
               for(arg <- prim.args){
                 if(map.contains(arg.uniqueId)){
                   map(id_of_dest) += arg.uniqueId

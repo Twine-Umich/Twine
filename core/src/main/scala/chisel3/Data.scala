@@ -442,8 +442,8 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
   private[chisel3] var _internal_uniqueId: Option[BigInt] = None
 
   // Internal API: returns a ref that can be assigned to, if consistent with the binding
-  private[chisel3] def lref: Node = {
-    requireIsHardware(this)
+  def lref: Node = {
+    // requireIsHardware(this)
     topBindingOpt match {
       case Some(binding: ReadOnlyBinding) => throwException(s"internal error: attempted to generate LHS ref to ReadOnlyBinding $binding") // scalastyle:ignore line.size.limit
       case Some(binding: TopBinding) => {
@@ -457,8 +457,8 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
 
 
   // Internal API: returns a ref, if bound. Literals should override this as needed.
-  private[chisel3] def ref: Arg = {
-    requireIsHardware(this)
+  def ref: Arg = {
+    // requireIsHardware(this)
     topBindingOpt match {
       case Some(binding: LitBinding) => throwException(s"internal error: can't handle literal binding $binding")
       case Some(binding: TopBinding) =>{
@@ -466,7 +466,11 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
           _internal_uniqueId = Some(node.uniqueId)
           node
         }
-      case opt => throwException(s"internal error: unknown binding $opt in generating LHS ref")
+      case opt => {
+          val node = Node(this, _internal_uniqueId)
+          _internal_uniqueId = Some(node.uniqueId)
+          node
+        }
     }
   }
 
