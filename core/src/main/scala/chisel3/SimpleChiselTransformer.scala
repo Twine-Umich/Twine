@@ -8,10 +8,36 @@ import scala.collection.mutable.ArrayBuffer
 
 object SimpleChiselTranformer{
     //replace lId with rId in ctx and return the new ctx
-    def replace(lId: Arg, rId: Arg, ctx: ArrayBuffer[Command]): Option[ArrayBuffer[Command]] ={
-        //TODO
-        //replaceWhen(lId, rId, ctx)(true)
-        return None
+    def replace(lId: Arg, rId: Arg, ctx: ArrayBuffer[Command]): ArrayBuffer[Command] ={
+        for((cmd, i) <- ctx.zipWithIndex){
+            cmd match{
+                case dPrim:DefPrim[_] =>{
+                    val arg_buf = new ArrayBuffer[Arg]
+                    for(arg<- dPrim.args){
+                        if(arg.uniqueId.equals(lId.uniqueId)){
+                            arg_buf += rId
+                        }else{
+                            arg_buf += arg
+                        }
+                    }
+                    ctx.update(i, DefPrim(dPrim.sourceInfo, dPrim.id, dPrim.op, arg_buf.toSeq:_*))
+                }
+                case regInit: DefRegInit =>{
+                    if(regInit.init.uniqueId.equals(lId.uniqueId)) regInit.init = rId                   
+                }
+                case whenBegin: WhenBegin =>{
+                    if(whenBegin.pred.uniqueId.equals(lId.uniqueId)) whenBegin.pred = rId                   
+                }
+                case connect: Connect =>{
+                    if(connect.exp.uniqueId.equals(lId.uniqueId)) connect.exp = rId                   
+                }
+                case connect: ConnectInit =>{
+                    if(connect.exp.uniqueId.equals(lId.uniqueId)) connect.exp = rId                   
+                }
+                case _ => ()
+            }
+        }
+        return ctx
     }
 
     //replace lId with rId in ctx and return the new ctx

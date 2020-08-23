@@ -724,19 +724,19 @@ case class DefPrim[T <: Data](sourceInfo: SourceInfo, id: T, op: PrimOp, args: A
 case class DefInvalid(sourceInfo: SourceInfo, arg: Arg) extends Command
 case class DefWire(sourceInfo: SourceInfo, id: Data) extends Definition
 case class DefReg(sourceInfo: SourceInfo, id: Data, clock: Arg) extends Definition
-case class DefRegInit(sourceInfo: SourceInfo, id: Data, clock: Arg, reset: Arg, init: Arg) extends Definition
+case class DefRegInit(sourceInfo: SourceInfo, id: Data, clock: Arg, reset: Arg, var init: Arg) extends Definition
 case class DefMemory(sourceInfo: SourceInfo, id: HasId, t: Data, size: BigInt) extends Definition
 case class DefSeqMemory(sourceInfo: SourceInfo, id: HasId, t: Data, size: BigInt, readUnderWrite: fir.ReadUnderWrite.Value) extends Definition
 case class DefMemPort[T <: Data](sourceInfo: SourceInfo, id: T, source: Node, dir: MemPortDirection, index: Arg, clock: Arg) extends Definition
 case class DefInstance(sourceInfo: SourceInfo, id: BaseModule, ports: Seq[Port]) extends Definition
-case class WhenBegin(sourceInfo: SourceInfo, pred: Arg) extends Command
+case class WhenBegin(sourceInfo: SourceInfo, var pred: Arg) extends Command
 case class WhenEnd(sourceInfo: SourceInfo, firrtlDepth: Int, hasAlt: Boolean = false) extends Command
 case class AltBegin(sourceInfo: SourceInfo) extends Command
 case class OtherwiseEnd(sourceInfo: SourceInfo, firrtlDepth: Int) extends Command
 case class Connect(sourceInfo: SourceInfo, loc: Node, var exp: Arg) extends Command
 case class BulkConnect(sourceInfo: SourceInfo, loc1: Node, loc2: Node) extends Command
 case class Attach(sourceInfo: SourceInfo, locs: Seq[Node]) extends Command
-case class ConnectInit(sourceInfo: SourceInfo, loc: Node, exp: Arg) extends Command
+case class ConnectInit(sourceInfo: SourceInfo, loc: Node,var exp: Arg) extends Command
 case class Stop(sourceInfo: SourceInfo, clock: Arg, ret: Int) extends Command
 case class Port(id: Data, dir: SpecifiedDirection)
 case class Printf(sourceInfo: SourceInfo, clock: Arg, pable: Printable) extends Command
