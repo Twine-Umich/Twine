@@ -60,14 +60,15 @@ sealed abstract class Aggregate extends Data {
       */
   def >>>[T <: SimpleChiselModuleTrait](that: T)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): T = {
     implicit val sourceInfo = UnlocatableSourceInfo
-    val input_ports = that.in.getElements
-    val output_ports = this.getElements
-    if(input_ports.size != output_ports.size){
-      throwException("The input does not match with outputs")
-    }
-    for((input_port, idx) <- input_ports.zipWithIndex){
-      input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
-    }
+    // val input_ports = that.in.getElements
+    // val output_ports = this.getElements
+    // if(input_ports.size != output_ports.size){
+    //   throwException("The input does not match with outputs")
+    // }
+    // for((input_port, idx) <- input_ports.zipWithIndex){
+    //   input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
+    // }
+    this >>> that.in
     this.to_module = Some(that)
     this.from_module match{
       case Some(m) =>{
@@ -678,7 +679,7 @@ abstract class Record(private[chisel3] implicit val compileOptions: CompileOptio
   private[chisel3] final def allElements: Seq[Element] = elements.toIndexedSeq.flatMap(_._2.allElements)
 
   override def getElements: Seq[Data] = elements.toIndexedSeq.map(_._2)
-
+  def getElementNames: Seq[String] = elements.toIndexedSeq.map(_._1)
   // Helper because Bundle elements are reversed before printing
   private[chisel3] def toPrintableHelper(elts: Seq[(String, Data)]): Printable = {
     // scalastyle:off if.brace

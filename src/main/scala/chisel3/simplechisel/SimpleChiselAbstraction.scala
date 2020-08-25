@@ -9,6 +9,8 @@ import chisel3.internal.firrtl._
 import chisel3.experimental._ 
 import chisel3.internal.sourceinfo._
 import chisel3.util._
+import chisel3.simplechisel.internal._
+import chisel3.internal.MonoConnect.MissingFieldException
 /** Abstract base class for SimpleChiselState, which only contains basic sequential blocks.
   * These may contain both logic and state which are written in the Module
   * body (constructor).
@@ -21,6 +23,52 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
   extends SimpleChiselStateInternal{
     override def ctrl: SimpleChiselIOCtrl
     
+    /** Connect this to that $coll mono-directionally hand side and element-wise.
+    *
+    * @param that the $coll to connect to
+    * @group Connect
+    */
+    override def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
+        implicit val sourceInfo = UnlocatableSourceInfo
+        val input_ports = that.in.getElements
+        val output_ports = this.out.getElements
+
+        if(input_ports.size != output_ports.size){
+          throwException("The input does not match with outputs")
+        }
+        for((field, sink_sub) <- that.in.elements) {
+          this.out.elements.get(field) match {
+            case Some(source_sub) => {
+              (sink_sub, source_sub) match{
+                case(sink_vec: Vec[Data @unchecked], source_e: Element) =>{
+                  val parallelizer = Module(new Parallelizer(source_e, sink_vec.length))
+                  this.ctrl >>> parallelizer.ctrl >>> that.ctrl
+                  parallelizer.in.bits := source_e
+                  sink_vec := parallelizer.out.bits
+                }
+                case(sink_e: Element, source_vec: Vec[Data @unchecked]) =>{
+                  val serializer = Module(new Serializer(sink_e, source_vec.length))
+                  this.ctrl >>> serializer.ctrl >>> that.ctrl
+                  serializer.in.bits := source_vec
+                  sink_e := serializer.out.bits
+                } // Add the transformation cases
+                case _ =>
+                  sink_sub.connect(source_sub)(sourceInfo,  moduleCompileOptions)
+              }
+            }
+            case None => {
+                throw MissingFieldException(field)
+            }
+          }
+        }
+
+        this.to_modules += that
+        that.from_modules += this
+        this.ctrl >>> that.ctrl
+
+        that
+    }
+
     private[chisel3] def generateSimpleChiselComponent(): Any = {
         if(!this.simpleChiselSubModules.isEmpty){
           return
@@ -69,43 +117,21 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
     }
 
     /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.to_modules += that
-        that.from_modules += this
-
-        this.ctrl >>> that.ctrl
-
-        that
-    }
-
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
       *
       * @param that the $coll to connect to
       * @group Connect
       */
     def >>> (that: Aggregate): Aggregate = {
         implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
+        // val input_ports = that.getElements
+        // val output_ports = this.out.getElements
+        // if(input_ports.size != output_ports.size){
+        //   throwException("The input does not match with outputs")
+        // }
+        // for((input_port, idx) <- input_ports.zipWithIndex){
+        //   input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
+        // }
+        this.out >>> that
         that.from_module = Some(this)
         that
     }
@@ -123,6 +149,52 @@ abstract class SimpleChiselState(implicit moduleCompileOptions: CompileOptions)
 abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
   extends SimpleChiselLogicInternal{
     override def ctrl: SimpleChiselIOCtrl
+
+  /** Connect this to that $coll mono-directionally hand side and element-wise.
+    *
+    * @param that the $coll to connect to
+    * @group Connect
+    */
+    override def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
+        implicit val sourceInfo = UnlocatableSourceInfo
+        val input_ports = that.in.getElements
+        val output_ports = this.out.getElements
+
+        if(input_ports.size != output_ports.size){
+          throwException("The input does not match with outputs")
+        }
+        for((field, sink_sub) <- that.in.elements) {
+          this.out.elements.get(field) match {
+            case Some(source_sub) => {
+              (sink_sub, source_sub) match{
+                case(sink_vec: Vec[Data @unchecked], source_e: Element) =>{
+                  val parallelizer = Module(new Parallelizer(source_e, sink_vec.length))
+                  this.ctrl >>> parallelizer.ctrl >>> that.ctrl
+                  parallelizer.in.bits := source_e
+                  sink_vec := parallelizer.out.bits
+                }
+                case(sink_e: Element, source_vec: Vec[Data @unchecked]) =>{
+                  val serializer = Module(new Serializer(sink_e, source_vec.length))
+                  this.ctrl >>> serializer.ctrl >>> that.ctrl
+                  serializer.in.bits := source_vec
+                  sink_e := serializer.out.bits
+                } // Add the transformation cases
+                case _ =>
+                  sink_sub.connect(source_sub)(sourceInfo,  moduleCompileOptions)
+              }
+            }
+            case None => {
+                throw MissingFieldException(field)
+            }
+          }
+        }
+
+        this.to_modules += that
+        that.from_modules += this
+        this.ctrl >>> that.ctrl
+
+        that
+    }
 
     private[chisel3] def generateSimpleChiselComponent(): Any = {
         if(!this.simpleChiselSubModules.isEmpty){
@@ -171,27 +243,6 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
         super.generateComponent()
     }
 
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.to_modules += that
-        that.from_modules += this
-        this.ctrl >>> that.ctrl
-
-        that
-    }
   /** Connect this to that $coll mono-directionally hand side and element-wise.
     *
     * @param that the $coll to connect to
@@ -199,14 +250,15 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
     */
   def >>> (that: Aggregate): Aggregate = {
       implicit val sourceInfo = UnlocatableSourceInfo
-      val input_ports = that.getElements
-      val output_ports = this.out.getElements
-      if(input_ports.size != output_ports.size){
-        throwException("The input does not match with outputs")
-      }
-      for((input_port, idx) <- input_ports.zipWithIndex){
-        input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-      }
+      // val input_ports = that.getElements
+      // val output_ports = this.out.getElements
+      // if(input_ports.size != output_ports.size){
+      //   throwException("The input does not match with outputs")
+      // }
+      // for((input_port, idx) <- input_ports.zipWithIndex){
+      //   input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
+      // }
+      this.out >>> that
       that.from_module = Some(this)
       that
   }
@@ -223,6 +275,52 @@ abstract class SimpleChiselLogic(implicit moduleCompileOptions: CompileOptions)
 abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
   extends SimpleChiselModuleInternal{
     override def ctrl: SimpleChiselIOCtrl
+
+    /** Connect this to that $coll mono-directionally hand side and element-wise.
+    *
+    * @param that the $coll to connect to
+    * @group Connect
+    */
+    override def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
+        implicit val sourceInfo = UnlocatableSourceInfo
+        val input_ports = that.in.getElements
+        val output_ports = this.out.getElements
+
+        if(input_ports.size != output_ports.size){
+          throwException("The input does not match with outputs")
+        }
+        for((field, sink_sub) <- that.in.elements) {
+          this.out.elements.get(field) match {
+            case Some(source_sub) => {
+              (sink_sub, source_sub) match{
+                case(sink_vec: Vec[Data @unchecked], source_e: Element) =>{
+                  val parallelizer = Module(new Parallelizer(source_e, sink_vec.length))
+                  this.ctrl >>> parallelizer.ctrl >>> that.ctrl
+                  parallelizer.in.bits := source_e
+                  sink_vec := parallelizer.out.bits
+                }
+                case(sink_e: Element, source_vec: Vec[Data @unchecked]) =>{
+                  val serializer = Module(new Serializer(sink_e, source_vec.length))
+                  this.ctrl >>> serializer.ctrl >>> that.ctrl
+                  serializer.in.bits := source_vec
+                  sink_e := serializer.out.bits
+                } // Add the transformation cases
+                case _ =>
+                  sink_sub.connect(source_sub)(sourceInfo,  moduleCompileOptions)
+              }
+            }
+            case None => {
+                throw MissingFieldException(field)
+            }
+          }
+        }
+
+        this.to_modules += that
+        that.from_modules += this
+        this.ctrl >>> that.ctrl
+
+        that
+    }
 
     private[chisel3] def generateSimpleChiselComponent(): Any = {
         if(!this.simpleChiselSubModules.isEmpty){
@@ -263,6 +361,12 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             d.out.valid :=  output_buffer.io.deq.valid
             this.in <> input_buffer.io.enq.bits
             this.out <> output_buffer.io.deq.bits
+            for((str,d) <- this.in.elements){
+              SimpleChiselTransformer.replace(d.ref, input_buffer.io.deq.bits.elements(str), this._commands)
+            }
+            for((str,d) <- this.out.elements){
+              SimpleChiselTransformer.replace(d.ref, output_buffer.io.enq.bits.elements(str), this._commands)
+            }
           }
           case _ => ()
         }
@@ -281,28 +385,6 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
         super.generateComponent()
     }
 
-    /** Connect this to that $coll mono-directionally hand side and element-wise.
-    *
-    * @param that the $coll to connect to
-    * @group Connect
-    */
-    def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
-        implicit val sourceInfo = UnlocatableSourceInfo
-        val input_ports = that.in.getElements
-        val output_ports = this.out.getElements
-        if(input_ports.size != output_ports.size){
-          throwException("The input does not match with outputs")
-        }
-        for((input_port, idx) <- input_ports.zipWithIndex){
-          input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-        }
-        this.to_modules += that
-        that.from_modules += this
-        this.ctrl >>> that.ctrl
-
-        that
-    }
-
   /** Connect this to that $coll mono-directionally hand side and element-wise.
     *
     * @param that the $coll to connect to
@@ -310,14 +392,15 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
     */
   def >>> (that: Aggregate): Aggregate = {
       implicit val sourceInfo = UnlocatableSourceInfo
-      val input_ports = that.getElements
-      val output_ports = this.out.getElements
-      if(input_ports.size != output_ports.size){
-        throwException("The input does not match with outputs")
-      }
-      for((input_port, idx) <- input_ports.zipWithIndex){
-        input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-      }
+      // val input_ports = that.getElements
+      // val output_ports = this.out.getElements
+      // if(input_ports.size != output_ports.size){
+      //   throwException("The input does not match with outputs")
+      // }
+      // for((input_port, idx) <- input_ports.zipWithIndex){
+      //   input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
+      // }
+      this.out >>> that
       that.from_module = Some(this)
       that
   }

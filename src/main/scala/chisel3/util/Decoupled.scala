@@ -6,6 +6,8 @@
 package chisel3.util
 
 import chisel3._
+import chisel3.simplechisel._
+import chisel3.simplechisel.util._
 import chisel3.experimental.{DataMirror, Direction, requireIsChiselType}
 import chisel3.internal.naming._  // can't use chisel3_ version because of compile order
 
@@ -212,8 +214,7 @@ class Queue[T <: Data](gen: T,
       gen
     }
   }
-  val in = IO(new Bundle() {})
-  val out = IO(new Bundle() {})
+
   val io = IO(new QueueIO(genType, entries))
 
   val ram = Mem(entries, genType)
@@ -321,4 +322,118 @@ object Queue
     deq.ready := irr.ready
     irr
   }
+}
+
+
+/** A hardware module implementing a Serializer
+  * @param gen The type of data to queue
+  * @param entries The max number of entries in the queue
+  * @param pipe True if a single entry queue can run at full throughput (like a pipeline). The ''ready'' signals are
+  * combinationally coupled.
+  * @param flow True if the inputs can be consumed on the same cycle (the inputs "flow" through the queue immediately).
+  * The ''valid'' signals are coupled.
+  *
+  */
+@chiselName
+class Serializer[T <: Data](gen: T,
+                       val entries: Int,
+                       pipe: Boolean = false,
+                       flow: Boolean = false)
+                      (implicit compileOptions: chisel3.CompileOptions)
+    extends SimpleChiselModule {
+  require(entries > -1, "Queue must have non-negative number of entries")
+  require(entries != 0, "Use companion object Queue.apply for zero entries")
+  val genType = if (compileOptions.declaredTypeMustBeUnbound) {
+    requireIsChiselType(gen)
+    gen
+  } else {
+    if (DataMirror.internal.isSynthesizable(gen)) {
+      chiselTypeOf(gen)
+    } else {
+      gen
+    }
+  }
+
+  val in = IO(Input(new Bundle{val bits = Vec(entries, gen)}))
+  val out = IO(Output(new Bundle{val bits = gen}))
+  val ctrl = IO(new DecoupledIOCtrl(0, 0))
+
+  val ram = Mem(entries, genType)
+  val deq_ptr = Counter(entries)
+
+  val empty = (deq_ptr.value === 0.U)
+
+
+  when (ctrl.in.valid && ctrl.in.ready) {
+    for(i <- 0 until entries){
+      ram(i) := in.bits(i)
+    }
+  }
+  when (ctrl.out.valid && ctrl.out.ready) {
+    deq_ptr.inc()
+  }
+
+  ctrl.out.valid := !empty
+  ctrl.in.ready := empty
+  out.bits := ram(deq_ptr.value)
+
+}
+
+
+/** A hardware module implementing a Serializer
+  * @param gen The type of data to queue
+  * @param entries The max number of entries in the queue
+  * @param pipe True if a single entry queue can run at full throughput (like a pipeline). The ''ready'' signals are
+  * combinationally coupled.
+  * @param flow True if the inputs can be consumed on the same cycle (the inputs "flow" through the queue immediately).
+  * The ''valid'' signals are coupled.
+  *
+  */
+class Parallelizer[T <: Data](gen: T,
+                       val entries: Int,
+                       pipe: Boolean = false,
+                       flow: Boolean = false)
+                      (implicit compileOptions: chisel3.CompileOptions)
+    extends SimpleChiselModule {
+  require(entries > -1, "Queue must have non-negative number of entries")
+  require(entries != 0, "Use companion object Queue.apply for zero entries")
+  val genType = if (compileOptions.declaredTypeMustBeUnbound) {
+    requireIsChiselType(gen)
+    gen
+  } else {
+    if (DataMirror.internal.isSynthesizable(gen)) {
+      chiselTypeOf(gen)
+    } else {
+      gen
+    }
+  }
+
+  val in = IO(Input(new Bundle{val bits = gen}))
+  val out = IO(Output(new Bundle{val bits = Vec(entries, gen)}))
+  val ctrl = IO(new DecoupledIOCtrl(0, 0))
+
+  val ram = Mem(entries, genType)
+  val enq_ptr = Counter(entries)
+
+  val empty = (enq_ptr.value === 0.U)
+  val full = (enq_ptr.value === (entries - 1).U)
+
+  when (ctrl.in.valid && ctrl.in.ready) {
+    ram(enq_ptr.value) := in.bits
+    enq_ptr.inc
+  }
+  when (ctrl.out.valid && ctrl.out.ready) {
+    for(i <- 0 until entries){
+      out.bits(i) := ram(i)
+    }
+  }
+
+  ctrl.out.valid := full
+  ctrl.in.ready := !empty
+
+
+  if (pipe) {
+    when (ctrl.out.ready) { ctrl.in.ready := true.B }
+  }
+
 }

@@ -194,6 +194,7 @@ package experimental {
   abstract class BaseModule extends HasId {
     // ArrayBuffer for simpleChisel
     val simpleChiselSubModules = new ListBuffer[chisel3.simplechisel.SimpleChiselModuleTrait]
+    val simpleChiselConnectionPairs = new ListBuffer[(Data, Data)]
     //
     // Builder Internals - this tracks which Module RTL construction belongs to.
     //
