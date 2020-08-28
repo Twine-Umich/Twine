@@ -214,7 +214,6 @@ class Queue[T <: Data](gen: T,
       gen
     }
   }
-
   val io = IO(new QueueIO(genType, entries))
 
   val ram = Mem(entries, genType)

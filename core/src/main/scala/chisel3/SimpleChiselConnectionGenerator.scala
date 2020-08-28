@@ -215,15 +215,15 @@ object SimpleChiselConnectionGenerator{
         // Count how many submodules are there, since each submodule is an instance
         var num_of_instance = 0
         for(cmd <- rm._commands){
-        cmd match{
-            case c: DefInstance =>{
-            _new_commands.prepend(cmd)
-            num_of_instance += 1
+            cmd match{
+                case c: DefInstance =>{
+                _new_commands.prepend(cmd)
+                num_of_instance += 1
+                }
+                case _ =>{
+                _new_commands.append(cmd)
+                }
             }
-            case _ =>{
-            _new_commands.append(cmd)
-            }
-        }
         }
         // Replace the original commands with the new sequence
         rm._commands = _new_commands
@@ -232,11 +232,11 @@ object SimpleChiselConnectionGenerator{
         sm.in.to_module match{ // TODO: Cross-level
             case Some(n) =>{
                 sm.ctrl match{
-                case ctrl: TightlyCoupledIOCtrlInternal => ()
-                case ctrl: ValidIOCtrlInternal => ()
-                case ctrl: DecoupledIOCtrlInternal => ()
-                case ctrl: OutOfOrderIOCtrlInternal => ()
-                case _ => ()
+                    case ctrl: TightlyCoupledIOCtrlInternal => ()
+                    case ctrl: ValidIOCtrlInternal => ()
+                    case ctrl: DecoupledIOCtrlInternal => ()
+                    case ctrl: OutOfOrderIOCtrlInternal => ()
+                    case _ => ()
                 }
             }
             case None =>
