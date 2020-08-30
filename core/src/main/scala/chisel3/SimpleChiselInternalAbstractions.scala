@@ -74,24 +74,6 @@ abstract class SimpleChiselModuleInternal(implicit moduleCompileOptions: Compile
       }
     }
 
-/** Abstract base class for SimpleChiselState that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract class SimpleChiselStateInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends State with SimpleChiselModuleTrait{
-      private[chisel3] def generateSimpleChiselComponent: Any
-    }
-
-/** Abstract base class for SimpleChiselLogic that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract class SimpleChiselLogicInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends Logic with SimpleChiselModuleTrait{
-      private[chisel3] def generateSimpleChiselComponent: Any
-    }
-
 trait SimpleChiselIOCtrlInternal{
   def clear: Bool
 }

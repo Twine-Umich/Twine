@@ -35,7 +35,7 @@ class DecoupledInterface extends Bundle with DecoupledInterfaceInternal{
 class OutOfOrderInterface(val size_of_reorder_buffer: Int) extends Bundle with OutOfOrderInterfaceInternal{
     val valid = Input(Bool())
     val ready = Output(Bool())
-    val ticket_num = Output(UInt(log2Ceil(size_of_reorder_buffer).W))
+    val ticket_num = Input(UInt(log2Ceil(size_of_reorder_buffer).W))
 }
 
 
