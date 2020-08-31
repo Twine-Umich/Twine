@@ -104,11 +104,12 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             // Only generate the queue if the receiving or sending buffer is not of size 0
             if(d.size_of_receiving_buffer != 0){
               val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true))
-              input_buffer.io.enq.valid := d.in.valid
               for((str,d) <- this.in.elements){
-                SimpleChiselTransformer.replace(d.ref, input_buffer.io.deq.bits.elements(str), this._commands)
+                SimpleChiselTransformer.replaceAll(d.ref, input_buffer.io.deq.bits.elements(str), this._commands)
               }
-              SimpleChiselTransformer.replace(d.in.ready.ref, input_buffer.io.deq.ready, this._commands)
+              SimpleChiselTransformer.replaceAll(d.in.valid.ref, input_buffer.io.deq.valid, this._commands)
+              SimpleChiselTransformer.replaceAll(d.in.ready.ref, input_buffer.io.deq.ready, this._commands)
+              input_buffer.io.enq.valid := d.in.valid
               d.in.ready := input_buffer.io.enq.ready
               this.in <> input_buffer.io.enq.bits
             }
@@ -116,12 +117,13 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             if(d.size_of_sending_buffer != 0){
               val output_buffer = Module(new Queue(chiselTypeOf(this.out), d.size_of_sending_buffer, true, true))
 
+              for((str,d) <- this.out.elements){
+                SimpleChiselTransformer.replaceUses(d.ref, output_buffer.io.enq.bits.elements(str), this._commands)
+              }
+              SimpleChiselTransformer.replaceAll(d.out.valid.ref, output_buffer.io.enq.valid, this._commands)
+              SimpleChiselTransformer.replaceAll(d.out.ready.ref, output_buffer.io.enq.ready, this._commands)
               output_buffer.io.deq.ready := d.out.ready
               d.out.valid :=  output_buffer.io.deq.valid
-
-              for((str,d) <- this.out.elements){
-                SimpleChiselTransformer.replace(d.ref, output_buffer.io.enq.bits.elements(str), this._commands)
-              }
               this.out <> output_buffer.io.deq.bits
             }
           }
@@ -129,23 +131,21 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             // Only generate the queue if the re-order buffer size is not of size 0
             if(d.size_of_reorder_buffer != 0){
               this.from_modules(0).ctrl match{
-                case ctrl:TightlyCoupledIOCtrl =>{
+                case ctrl @ (_ : TightlyCoupledIOCtrl| _ : ValidIOCtrl | _: DecoupledIOCtrl)=>{
                   val input_buffer = Module(new InOrderToOutOfOrderQueue(chiselTypeOf(this.in), d.size_of_reorder_buffer))
-                  input_buffer.in <> this.in
+                  for((str,d) <- this.in.elements){
+                    SimpleChiselTransformer.replaceAll(d.ref, input_buffer.out.bits.elements(str), this._commands)
+                  }
+                  SimpleChiselTransformer.replaceAll(d.in.valid.ref, input_buffer.ctrl.out.valid, this._commands)
+                  SimpleChiselTransformer.replaceAll(d.in.ready.ref, input_buffer.ctrl.out.ready, this._commands)
+                  SimpleChiselTransformer.replaceAll(d.in.ticket_num.ref, input_buffer.ctrl.out.ticket_num, this._commands)
                   input_buffer.ctrl.in.valid := d.in.valid
                   d.in.ready := input_buffer.ctrl.in.ready
+                  this.in <> input_buffer.in.bits
                 }
-                case ctrl:ValidIOCtrl =>
-                case ctrl:DecoupledIOCtrl =>
-                case ctrl:OutOfOrderIOCtrl =>
+                case ctrl:OutOfOrderIOCtrl => ()
                 case _ => ()
               }
-              input_buffer.io.enq.valid := d.in.valid
-              d.in.ready := input_buffer.io.enq.ready
-              for((str,d) <- this.in.elements){
-                SimpleChiselTransformer.replace(d.ref, input_buffer.io.deq.bits.elements(str), this._commands)
-              }
-              this.in <> input_buffer.io.enq.bits
             }
           }
           case _ => ()

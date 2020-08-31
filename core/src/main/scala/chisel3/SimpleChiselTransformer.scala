@@ -7,8 +7,38 @@ import chisel3.experimental._
 import scala.collection.mutable.ArrayBuffer
 
 object SimpleChiselTransformer{
-    //replace lId with rId in ctx and return the new ctx
-    def replace(lId: Arg, rId: Data, ctx: ArrayBuffer[Command]): ArrayBuffer[Command] ={
+    def replaceAll(lId: Arg, rId: Data, ctx: ArrayBuffer[Command]): ArrayBuffer[Command] ={
+        replaceDsts(lId, rId, ctx)
+        replaceUses(lId, rId, ctx)
+        return ctx
+    }
+    //replace the dst lId with rId in ctx and return the new ctx
+    def replaceDsts(lId: Arg, rId: Data, ctx: ArrayBuffer[Command]): ArrayBuffer[Command] ={
+        for((cmd, i) <- ctx.zipWithIndex){
+            cmd match{
+                case dPrim:DefPrim[_] =>{
+                    val arg_buf = new ArrayBuffer[Arg]
+                    for(arg<- dPrim.args){
+                            arg_buf += arg
+                    }
+                    if(dPrim.id.ref.uniqueId.equals(lId.uniqueId))
+                        ctx.update(i, DefPrim(dPrim.sourceInfo, rId, dPrim.op, arg_buf.toSeq:_*))
+                    else
+                        ctx.update(i, DefPrim(dPrim.sourceInfo, dPrim.id, dPrim.op, arg_buf.toSeq:_*))
+                }
+                case connect: Connect =>{
+                    if(connect.loc.uniqueId.equals(lId.uniqueId)) connect.loc = Node(rId)               
+                }
+                case connect: ConnectInit =>{
+                    if(connect.loc.uniqueId.equals(lId.uniqueId)) connect.loc = Node(rId)                    
+                }
+                case _ => ()
+            }
+        }
+        return ctx
+    }
+    //replace all uses of lId with rId in ctx and return the new ctx
+    def replaceUses(lId: Arg, rId: Data, ctx: ArrayBuffer[Command]): ArrayBuffer[Command] ={
         for((cmd, i) <- ctx.zipWithIndex){
             cmd match{
                 case dPrim:DefPrim[_] =>{
@@ -30,11 +60,9 @@ object SimpleChiselTransformer{
                 }
                 case connect: Connect =>{
                     if(connect.exp.uniqueId.equals(lId.uniqueId)) connect.exp = rId.ref    
-                    if(connect.loc.uniqueId.equals(lId.uniqueId)) connect.loc = Node(rId)               
                 }
                 case connect: ConnectInit =>{
                     if(connect.exp.uniqueId.equals(lId.uniqueId)) connect.exp = rId.ref 
-                    if(connect.loc.uniqueId.equals(lId.uniqueId)) connect.loc = Node(rId)                    
                 }
                 case _ => ()
             }

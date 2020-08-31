@@ -80,6 +80,7 @@ class TightlyCoupledIOCtrl(val num_of_cycles: Int) extends  SimpleChiselIOCtrl w
             }
             case d:OutOfOrderIOCtrl =>{
                 val ctrlIO = that.asInstanceOf[OutOfOrderIOCtrl]
+                d.in.ticket_num := DontCare
             }
         }
         that
@@ -117,6 +118,7 @@ class ValidIOCtrl extends  SimpleChiselIOCtrl with ValidIOCtrlInternal{
             }
             case d:OutOfOrderIOCtrl =>{
                 d.in.valid := this.out.valid
+                d.in.ticket_num := DontCare
             }
         }
         that
