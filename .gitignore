@@ -12,3 +12,7 @@ test_run_dir
 *~
 \#*\#
 .\#*
+.bloop/
+.metals/
+.scalafmt.conf
+project/metals.sbt
