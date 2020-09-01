@@ -109,37 +109,41 @@ object SimpleChiselTransformer {
       ctx: ArrayBuffer[Command]
   ): Option[ArrayBuffer[Command]] = {
 
-    def isDefinition(id: Arg)(command: Command): Boolean = command match {
-      case DefWire(_, data) => data.ref.uniqueId.equals(id.uniqueId)
-      case DefReg(_, data, clock) =>
-        data.ref.uniqueId.equals(id.uniqueId) || clock.uniqueId.equals(
-          id.uniqueId
-        )
-      case DefRegInit(_, data, clock, reset, init) =>
-        data.ref.uniqueId.equals(id.uniqueId) || clock.uniqueId.equals(
-          id.uniqueId
-        ) || reset.uniqueId.equals(id.uniqueId) || init.uniqueId.equals(
-          id.uniqueId
-        )
+    def isDefinition(id: Arg, eql: Arg => Boolean, eql2: Data => Boolean)(
+        command: Command
+    ): Boolean =
+      command match {
+        case DefPrim(_, _, _, args @ _*)  => args.forall(a => eql(a))
+        case DefInvalid(_, arg)           => eql(arg)
+        case DefWire(_, data)             => eql2(data)
+        case DefReg(_, data, _)           => eql2(data)
+        case DefRegInit(_, data, _, _, _) => eql2(data)
+        case _                            => false
+      }
 
-      case _ => false
+    def dependsOnId(cmd: Command, eql: Arg => Boolean): Boolean = cmd match {
+      case Connect(_, _, exp)     => eql(exp)
+      case WhenBegin(_, pred)     => eql(pred)
+      case ConnectInit(_, _, exp) => eql(exp)
+      case Stop(_, clock, _)      => eql(clock)
+      case Printf(_, clock, _)    => eql(clock)
+      case _                      => false
     }
 
-    def dependsOnId(cmd: Command, arg: Command): Boolean = cmd match {
-      case DefPrim(sourceInfo, id, _, args) => false
-      case DefInvalid(sourceInfo, arg)      => false
-    }
-
-    def shouldFilter(cmd: Command): Boolean =
-      !ctx.map(c => dependsOnId(c, cmd)).reduce((a, b) => a && b)
-
-    ctx.find(isDefinition(id)) match {
+    ctx.find(
+      isDefinition(
+        id,
+        a => a.uniqueId.equals(id.uniqueId),
+        b => b.ref.uniqueId.equals(id.uniqueId)
+      )
+    ) match {
       case None => Some(ctx)
       case Some(definition) =>
-        if (shouldFilter(definition))
+        if (!ctx.forall(c =>
+              dependsOnId(c, a => a.uniqueId.equals(id.uniqueId))
+            ))
           Option(ctx.filter(a => a.equals(definition)))
         else Option(ctx)
-
     }
   }
 
