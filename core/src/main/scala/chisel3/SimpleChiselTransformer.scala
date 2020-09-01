@@ -130,18 +130,17 @@ object SimpleChiselTransformer {
       case _                      => false
     }
 
+    def arg_equality(a: Arg) = a.uniqueId.equals(id.uniqueId)
     ctx.find(
       isDefinition(
         id,
-        a => a.uniqueId.equals(id.uniqueId),
+        arg_equality,
         b => b.ref.uniqueId.equals(id.uniqueId)
       )
     ) match {
       case None => Some(ctx)
       case Some(definition) =>
-        if (!ctx.forall(c =>
-              dependsOnId(c, a => a.uniqueId.equals(id.uniqueId))
-            ))
+        if (!ctx.forall(c => dependsOnId(c, arg_equality)))
           Option(ctx.filter(a => a.equals(definition)))
         else Option(ctx)
     }
