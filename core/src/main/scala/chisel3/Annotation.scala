@@ -29,17 +29,7 @@ trait RunFirrtlTransform extends ChiselAnnotation {
   def transformClass: Class[_ <: Transform]
 }
 
-
-// This exists for implementation reasons, we don't want people using this type directly
-final case class ChiselLegacyAnnotation private[chisel3] (
-    component: InstanceId,
-    transformClass: Class[_ <: Transform],
-    value: String) extends ChiselAnnotation with RunFirrtlTransform {
-  def toFirrtl: Annotation = Annotation(component.toNamed, transformClass, value)
-}
-private[chisel3] object ChiselLegacyAnnotation
-
-object annotate { // scalastyle:ignore object.name
+object annotate {
   def apply(anno: ChiselAnnotation): Unit = {
     Builder.annotations += anno
   }
@@ -82,7 +72,7 @@ object annotate { // scalastyle:ignore object.name
   * in [[chisel3.Driver]] will pass the annotations to FIRRTL automatically.
   */
 
-object doNotDedup { // scalastyle:ignore object.name
+object doNotDedup {
   /** Marks a module to be ignored in Dedup Transform in Firrtl
     *
     * @param module The module to be marked

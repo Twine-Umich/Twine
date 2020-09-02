@@ -27,65 +27,7 @@ abstract class Logic(implicit moduleCompileOptions: CompileOptions)
     extends MultiIOModule {
   
   private[chisel3] override def generateComponent(): Component = { // scalastyle:ignore cyclomatic.complexity
-    require(!_closed, "Can't generate module more than once")
-    _closed = true
-
-    val names = nameIds(classOf[RawModule])
-
-    // Ports get first naming priority, since they are part of a Module's IO spec
-    namePorts(names)
-
-    // Then everything else gets named
-    for ((node, name) <- names) {
-      node.suggestName(name)
-    }
-
-    // All suggestions are in, force names to every node.
-    for (id <- getIds) {
-      id match {
-        case id: BaseModule => id.forceName(default=id.desiredName, _namespace)
-        case id: MemBase[_] => id.forceName(default="_T", _namespace)
-        case id: Data  =>
-          if (id.isSynthesizable) {
-            id.topBinding match {
-              case OpBinding(_) | MemoryPortBinding(_) | PortBinding(_) | RegBinding(_) | WireBinding(_) =>
-                id.forceName(default="_T", _namespace)
-              case _ =>  // don't name literals
-            }
-          } // else, don't name unbound types
-      }
-      id._onModuleClose
-    }
-
-    val firrtlPorts = getModulePorts map { port: Data =>
-      // Special case Vec to make FIRRTL emit the direction of its
-      // element.
-      // Just taking the Vec's specifiedDirection is a bug in cases like
-      // Vec(Flipped()), since the Vec's specifiedDirection is
-      // Unspecified.
-      val direction = port match {
-        case v: Vec[_] => v.specifiedDirection match {
-          case SpecifiedDirection.Input => SpecifiedDirection.Input
-          case SpecifiedDirection.Output => SpecifiedDirection.Output
-          case SpecifiedDirection.Flip => SpecifiedDirection.flip(v.sample_element.specifiedDirection)
-          case SpecifiedDirection.Unspecified => v.sample_element.specifiedDirection
-        }
-        case _ => port.specifiedDirection
-      }
-
-      Port(port, direction)
-    }
-    _firrtlPorts = Some(firrtlPorts)
-
-    // Generate IO invalidation commands to initialize outputs as unused,
-    //  unless the client wants explicit control over their generation.
-    val invalidateCommands = {
-      if (!compileOptions.explicitInvalidate) {
-        getModulePorts map { port => DefInvalid(UnlocatableSourceInfo, port.ref) }
-      } else {
-        Seq()
-      }
-    }
+    val component = super.generateComponent
 
     // Logic instance does not contain any registers
     for(command <- getCommands){
@@ -99,8 +41,6 @@ abstract class Logic(implicit moduleCompileOptions: CompileOptions)
         }
     }
 
-    val component = DefModule(this, name, firrtlPorts, invalidateCommands ++ getCommands)
-    _component = Some(component)
     component
   }
 }

@@ -14,7 +14,6 @@ import _root_.firrtl.PrimOps
 import scala.collection.immutable.NumericRange
 import scala.math.BigDecimal.RoundingMode
 
-// scalastyle:off number.of.types
 
 case class PrimOp(name: String) {
   override def toString: String = name
@@ -74,11 +73,11 @@ abstract class Arg(in_uniqueId: Option[BigInt] = None) {
 case class Node(id: HasId, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId) {
   override def fullName(ctx: Component): String = id.getOptionRef match {
     case Some(arg) => arg.fullName(ctx)
-    case None => id.suggestedName.getOrElse("??")
+    case None => id.instanceName
   }
   def name: String = id.getOptionRef match {
     case Some(arg) => arg.name
-    case None => id.suggestedName.getOrElse("??")
+    case None => id.instanceName
   }
 }
 
@@ -96,7 +95,7 @@ abstract class LitArg(val num: BigInt, widthArg: Width) extends Arg {
   protected def minWidth: Int
   if (forcedWidth) {
     require(widthArg.get >= minWidth,
-      s"The literal value ${num} was elaborated with a specified width of ${widthArg.get} bits, but at least ${minWidth} bits are required.") // scalastyle:ignore line.size.limit
+      s"The literal value ${num} was elaborated with a specified width of ${widthArg.get} bits, but at least ${minWidth} bits are required.")
   }
 }
 
@@ -360,7 +359,6 @@ object IntervalRange {
     }
   }
 
-  //scalastyle:off method.name
   def Unknown: IntervalRange = range"[?,?].?"
 }
 
@@ -391,7 +389,6 @@ sealed class IntervalRange(
     case _ =>
   }
 
-  //scalastyle:off cyclomatic.complexity
   override def toString: String = {
     val binaryPoint = firrtlBinaryPoint match {
       case firrtlir.IntWidth(n) => s"$n"
@@ -719,7 +716,6 @@ abstract class Definition extends Command {
   def id: HasId
   def name: String = id.getRef.name
 }
-// scalastyle:off line.size.limit
 case class DefPrim[T <: Data](sourceInfo: SourceInfo, id: T, op: PrimOp, args: Arg*) extends Definition
 case class DefInvalid(sourceInfo: SourceInfo, arg: Arg) extends Command
 case class DefWire(sourceInfo: SourceInfo, id: Data) extends Definition
@@ -740,6 +736,13 @@ case class ConnectInit(sourceInfo: SourceInfo,var loc: Node,var exp: Arg) extend
 case class Stop(sourceInfo: SourceInfo, clock: Arg, ret: Int) extends Command
 case class Port(id: Data, dir: SpecifiedDirection)
 case class Printf(sourceInfo: SourceInfo, clock: Arg, pable: Printable) extends Command
+object Formal extends Enumeration {
+  val Assert = Value("assert")
+  val Assume = Value("assume")
+  val Cover = Value("cover")
+}
+case class Verification(op: Formal.Value, sourceInfo: SourceInfo, clock: Arg,
+                        predicate: Arg, message: String) extends Command
 abstract class Component extends Arg {
   def id: BaseModule
   def name: String

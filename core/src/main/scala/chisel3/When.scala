@@ -9,7 +9,7 @@ import chisel3.internal.Builder.pushCommand
 import chisel3.internal.firrtl._
 import chisel3.internal.sourceinfo.{SourceInfo}
 
-object when {  // scalastyle:ignore object.name
+object when {
   /** Create a `when` condition block, where whether a block of logic is
     * executed or not depends on the conditional.
     *
@@ -28,7 +28,7 @@ object when {  // scalastyle:ignore object.name
     * }}}
     */
 
-  def apply(cond: => Bool)(block: => Any)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): WhenContext = { // scalastyle:ignore line.size.limit
+  def apply(cond: => Bool)(block: => Any)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): WhenContext = {
     new WhenContext(sourceInfo, Some(() => cond), block)
   }
 }
@@ -45,13 +45,15 @@ object when {  // scalastyle:ignore object.name
   */
 final class WhenContext(sourceInfo: SourceInfo, cond: Option[() => Bool], block: => Any, firrtlDepth: Int = 0) {
 
+  private var scopeOpen = false
+
   /** This block of logic gets executed if above conditions have been
     * false and this condition is true. The lazy argument pattern
     * makes it possible to delay evaluation of cond, emitting the
     * declaration and assignment of the Bool node of the predicate in
     * the correct place.
     */
-  def elsewhen (elseCond: => Bool)(block: => Any)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): WhenContext = { // scalastyle:ignore line.size.limit
+  def elsewhen (elseCond: => Bool)(block: => Any)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): WhenContext = {
     new WhenContext(sourceInfo, Some(() => elseCond), block, firrtlDepth + 1)
   }
 
@@ -65,13 +67,16 @@ final class WhenContext(sourceInfo: SourceInfo, cond: Option[() => Bool], block:
   def otherwise(block: => Any)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Unit =
     new WhenContext(sourceInfo, None, block, firrtlDepth + 1)
 
+  def active(): Boolean = scopeOpen
+
   /*
    *
    */
   if (firrtlDepth > 0) { pushCommand(AltBegin(sourceInfo)) }
   cond.foreach( c => pushCommand(WhenBegin(sourceInfo, c().ref)) )
-  Builder.whenDepth += 1
+  Builder.pushWhen(this)
   try {
+    scopeOpen = true
     block
   } catch {
     case ret: scala.runtime.NonLocalReturnControl[_] =>
@@ -79,7 +84,8 @@ final class WhenContext(sourceInfo: SourceInfo, cond: Option[() => Bool], block:
         " Perhaps you meant to use Mux or a Wire as a return value?"
       )
   }
-  Builder.whenDepth -= 1
+  scopeOpen = false
+  Builder.popWhen()
   cond.foreach( c => pushCommand(WhenEnd(sourceInfo,firrtlDepth)) )
   if (cond.isEmpty) { pushCommand(OtherwiseEnd(sourceInfo,firrtlDepth)) }
 }

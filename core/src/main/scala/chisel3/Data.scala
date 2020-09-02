@@ -166,7 +166,7 @@ package experimental {
     }
 
     // Internal reflection-style APIs, subject to change and removal whenever.
-    object internal { // scalastyle:ignore object.name
+    object internal {
       def isSynthesizable(target: Data): Boolean = target.isSynthesizable
       // For those odd cases where you need to care about object reference and uniqueness
       def chiselTypeClone[T<:Data](target: Data): T = {
@@ -182,7 +182,6 @@ package experimental {
   * - For other types of the same class are are the same: clone of any of the elements
   * - Otherwise: fail
   */
-//scalastyle:off cyclomatic.complexity
 private[chisel3] object cloneSupertype {
   def apply[T <: Data](elts: Seq[T], createdType: String)(implicit sourceInfo: SourceInfo,
                                                           compileOptions: CompileOptions): T = {
@@ -273,7 +272,7 @@ object Flipped {
   * @groupdesc Connect Utilities for connecting hardware components
   * @define coll data
   */
-abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // scalastyle:ignore number.of.methods
+abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
   // This is a bad API that punches through object boundaries.
   @deprecated("pending removal once all instances replaced", "chisel3")
   private[chisel3] def flatten: IndexedSeq[Element] = {
@@ -281,6 +280,14 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
       case elt: Aggregate => elt.getElements.toIndexedSeq flatMap {_.flatten}
       case elt: Element => IndexedSeq(elt)
       case elt => throwException(s"Cannot flatten type ${elt.getClass}")
+    }
+  }
+
+  override def autoSeed(name: String): this.type = {
+    topBindingOpt match {
+      // Ports are special in that the autoSeed will keep the first name, not the last name
+      case Some(PortBinding(m)) if hasAutoSeed && Builder.currentModule.contains(m) => this
+      case _ => super.autoSeed(name)
     }
   }
 
@@ -303,7 +310,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
     * the compatibility layer where, at the elements, Flip is Input and unspecified is Output.
     * DO NOT USE OUTSIDE THIS PURPOSE. THIS OPERATION IS DANGEROUS!
     */
-  private[chisel3] def _assignCompatibilityExplicitDirection: Unit = { // scalastyle:off method.name
+  private[chisel3] def _assignCompatibilityExplicitDirection: Unit = {
     (this, _specifiedDirection) match {
       case (_: Analog, _) => // nothing to do
       case (_, SpecifiedDirection.Unspecified) => _specifiedDirection = SpecifiedDirection.Output
@@ -369,16 +376,16 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
   // TODO Is this okay for sample_element? It *shouldn't* be visible to users
   protected def bindingToString: String = topBindingOpt match {
     case None => ""
-    case Some(OpBinding(enclosure)) => s"(OpResult in ${enclosure.desiredName})"
-    case Some(MemoryPortBinding(enclosure)) => s"(MemPort in ${enclosure.desiredName})"
+    case Some(OpBinding(enclosure, _)) => s"(OpResult in ${enclosure.desiredName})"
+    case Some(MemoryPortBinding(enclosure, _)) => s"(MemPort in ${enclosure.desiredName})"
     case Some(PortBinding(enclosure)) if !enclosure.isClosed => s"(IO in unelaborated ${enclosure.desiredName})"
     case Some(PortBinding(enclosure)) if enclosure.isClosed =>
       DataMirror.fullModulePorts(enclosure).find(_._2 eq this) match {
         case Some((name, _)) => s"(IO $name in ${enclosure.desiredName})"
         case None => s"(IO (unknown) in ${enclosure.desiredName})"
       }
-    case Some(RegBinding(enclosure)) => s"(Reg in ${enclosure.desiredName})"
-    case Some(WireBinding(enclosure)) => s"(Wire in ${enclosure.desiredName})"
+    case Some(RegBinding(enclosure, _)) => s"(Reg in ${enclosure.desiredName})"
+    case Some(WireBinding(enclosure, _)) => s"(Wire in ${enclosure.desiredName})"
     case Some(DontCareBinding()) => s"(DontCare)"
     case Some(ElementLitBinding(litArg)) => s"(unhandled literal)"
     case Some(BundleLitBinding(litMap)) => s"(unhandled bundle literal)"
@@ -391,7 +398,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
 
   private[chisel3] def badConnect(that: Data)(implicit sourceInfo: SourceInfo): Unit =
     throwException(s"cannot connect ${this} and ${that}")
-  private[chisel3] def connect(that: Data)(implicit sourceInfo: SourceInfo, connectCompileOptions: CompileOptions): Unit = { // scalastyle:ignore line.size.limit
+  private[chisel3] def connect(that: Data)(implicit sourceInfo: SourceInfo, connectCompileOptions: CompileOptions): Unit = {
     if (connectCompileOptions.checkSynthesizable) {
       requireIsHardware(this, "data to be connected")
       requireIsHardware(that, "data to be connected")
@@ -411,7 +418,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
       this legacyConnect that
     }
   }
-  private[chisel3] def bulkConnect(that: Data)(implicit sourceInfo: SourceInfo, connectCompileOptions: CompileOptions): Unit = { // scalastyle:ignore line.size.limit
+  private[chisel3] def bulkConnect(that: Data)(implicit sourceInfo: SourceInfo, connectCompileOptions: CompileOptions): Unit = {
     if (connectCompileOptions.checkSynthesizable) {
       requireIsHardware(this, s"data to be bulk-connected")
       requireIsHardware(that, s"data to be bulk-connected")
@@ -441,16 +448,30 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
 
   private[chisel3] var _internal_uniqueId: Option[BigInt] = None
 
+  private def requireVisible(): Unit = {
+    val mod = topBindingOpt.flatMap(_.location)
+    topBindingOpt match {
+      case Some(tb: TopBinding) if (mod == Builder.currentModule) =>
+      case Some(pb: PortBinding) if (mod.flatMap(Builder.retrieveParent(_,Builder.currentModule.get)) == Builder.currentModule) =>
+      case _ =>
+        throwException(s"operand is not visible from the current module")
+    }
+    if (!MonoConnect.checkWhenVisibility(this)) {
+      throwException(s"operand has escaped the scope of the when in which it was constructed")
+    }
+  }
+  
   // Internal API: returns a ref that can be assigned to, if consistent with the binding
   def lref: Node = {
     // requireIsHardware(this)
+    requireVisible()
     topBindingOpt match {
       case Some(binding: ReadOnlyBinding) => throwException(s"internal error: attempted to generate LHS ref to ReadOnlyBinding $binding") // scalastyle:ignore line.size.limit
       case Some(binding: TopBinding) => {
           val node = Node(this, _internal_uniqueId)
           _internal_uniqueId = Some(node.uniqueId)
           node
-        }
+      }
       case opt => throwException(s"internal error: unknown binding $opt in generating LHS ref")
     }
   }
@@ -458,7 +479,12 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
 
   // Internal API: returns a ref, if bound. Literals should override this as needed.
   def ref: Arg = {
-    // requireIsHardware(this)
+    requireIsHardware(this)
+    if (Builder.currentModule.isDefined) {
+      // This is allowed (among other cases) for evaluating args of Printf / Assert / Printable, which are
+      // partially resolved *after* elaboration completes. If this is resolved, the check should be unconditional.
+      requireVisible()
+    }
     topBindingOpt match {
       case Some(binding: LitBinding) => throwException(s"internal error: can't handle literal binding $binding")
       case Some(binding: TopBinding) =>{
@@ -505,7 +531,11 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
     * @param that the $coll to connect to
     * @group Connect
     */
-  final def := (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): Unit = this.connect(that)(sourceInfo, connectionCompileOptions) // scalastyle:ignore line.size.limit
+  final def := (that: => Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): Unit = {
+    prefix(this) {
+      this.connect(that)(sourceInfo, connectionCompileOptions)
+    }
+  }
 
   /** Connect this $coll to that $coll bi-directionally and element-wise.
     *
@@ -514,7 +544,11 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc { // sc
     * @param that the $coll to connect to
     * @group Connect
     */
-  final def <> (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): Unit = this.bulkConnect(that)(sourceInfo, connectionCompileOptions) // scalastyle:ignore line.size.limit
+  final def <> (that: => Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions: CompileOptions): Unit = {
+    prefix(this) {
+      this.bulkConnect(that)(sourceInfo, connectionCompileOptions)
+    }
+  }
 
 
 
@@ -603,7 +637,7 @@ trait WireFactory {
     val x = t.cloneTypeFull
 
     // Bind each element of x to being a Wire
-    x.bind(WireBinding(Builder.forcedUserModule))
+    x.bind(WireBinding(Builder.forcedUserModule, Builder.currentWhen()))
 
     pushCommand(DefWire(sourceInfo, x))
     if (!compileOptions.explicitInvalidate) {
@@ -697,7 +731,7 @@ object Wire extends WireFactory
   */
 object WireDefault {
 
-  private def applyImpl[T <: Data](t: T, init: Data)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = { // scalastyle:ignore line.size.limit
+  private def applyImpl[T <: Data](t: T, init: Data)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
     implicit val noSourceInfo = UnlocatableSourceInfo
     val x = Wire(t)
     requireIsHardware(init, "wire initializer")
@@ -710,7 +744,7 @@ object WireDefault {
     * @param init The default connection to this [[Wire]], can only be [[DontCare]]
     * @note This is really just a specialized form of `apply[T <: Data](t: T, init: T): T` with [[DontCare]] as `init`
     */
-  def apply[T <: Data](t: T, init: DontCare.type)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = { // scalastyle:ignore line.size.limit
+  def apply[T <: Data](t: T, init: DontCare.type)(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): T = {
     applyImpl(t, init)
   }
 
@@ -755,11 +789,11 @@ package internal {
 
     def toPrintable: Printable = PString("DONTCARE")
 
-    private[chisel3] def connectFromBits(that: Bits)(implicit sourceInfo:  SourceInfo, compileOptions: CompileOptions): Unit = { // scalastyle:ignore line.size.limit
+    private[chisel3] def connectFromBits(that: Bits)(implicit sourceInfo:  SourceInfo, compileOptions: CompileOptions): Unit = {
       Builder.error("connectFromBits: DontCare cannot be a connection sink (LHS)")
     }
 
-    def do_asUInt(implicit sourceInfo: chisel3.internal.sourceinfo.SourceInfo, compileOptions: CompileOptions): UInt = { // scalastyle:ignore line.size.limit
+    def do_asUInt(implicit sourceInfo: chisel3.internal.sourceinfo.SourceInfo, compileOptions: CompileOptions): UInt = {
       Builder.error("DontCare does not have a UInt representation")
       0.U
     }
