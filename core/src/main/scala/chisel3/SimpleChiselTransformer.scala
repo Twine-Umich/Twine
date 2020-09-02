@@ -159,9 +159,10 @@ object SimpleChiselTransformer {
           .filter(c => dependsOnArg(cmd, a => a.equals(uid)))
           .map(c => ctx.indexOf(c))
           .lift(0)
-          .map(_ + 1) // put it in front of the item closest to the front that depends on it
+          .map(_ + 1)
+          .getOrElse(ctx.length)
 
-      case None => None
+      case None => ctx.length
     }
 
     val ourLastDependency = ctx
@@ -169,11 +170,13 @@ object SimpleChiselTransformer {
       .map(id => dependsOnArg(cmd, a => a.equals(id)))
       .zipWithIndex
       .reverse
-      .find(((a: Boolean, b: Int) => a).tupled)
+      .find(((a: Boolean, b: Int) => a).tupled) match {
+      case Some((b, i)) => i
+      case None         => 0
+    }
 
-    // basically insert using the two vars from above. thinking about how to use them
-    //ctx.insert()
-    None
+    ctx.insert(math.min(ourFirstDependent, ourLastDependency))
+    Some(ctx)
   }
 
   // Update functions (Optional)
