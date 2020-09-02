@@ -130,21 +130,90 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
           case d:OutOfOrderIOCtrl =>{
             // Only generate the queue if the re-order buffer size is not of size 0
             if(d.size_of_reorder_buffer != 0){
-              this.from_modules(0).ctrl match{
-                case ctrl @ (_ : TightlyCoupledIOCtrl| _ : ValidIOCtrl | _: DecoupledIOCtrl)=>{
-                  val input_buffer = Module(new InOrderToOutOfOrderQueue(chiselTypeOf(this.in), d.size_of_reorder_buffer))
-                  for((str,d) <- this.in.elements){
-                    SimpleChiselTransformer.replaceAll(d.ref, input_buffer.out.bits.elements(str), this._commands)
+              var input_uses_inorder = false
+              for(m <- this.from_modules){ // We only allow outOfOrder to OutOfOder if it is one-to-one
+                var num_of_outOfOrderIO = 0
+                m.ctrl match{
+                  case ctrl @ (_ : TightlyCoupledIOCtrl| _ : ValidIOCtrl | _: DecoupledIOCtrl)=>{
+                    input_uses_inorder = true
                   }
-                  SimpleChiselTransformer.replaceAll(d.in.valid.ref, input_buffer.ctrl.out.valid, this._commands)
-                  SimpleChiselTransformer.replaceAll(d.in.ready.ref, input_buffer.ctrl.out.ready, this._commands)
-                  SimpleChiselTransformer.replaceAll(d.in.ticket_num.ref, input_buffer.ctrl.out.ticket_num, this._commands)
-                  input_buffer.ctrl.in.valid := d.in.valid
-                  d.in.ready := input_buffer.ctrl.in.ready
-                  this.in <> input_buffer.in.bits
+                  case ctrl:OutOfOrderIOCtrl =>{
+                    num_of_outOfOrderIO += 1
+                    if(num_of_outOfOrderIO >= 2 || m.to_modules.size > 1){
+                      input_uses_inorder = true
+                    }
+                  }
+                  case _ =>()
                 }
-                case ctrl:OutOfOrderIOCtrl => ()
-                case _ => ()
+              }
+
+              var output_uses_inorder = false
+              for(m <- this.to_modules){ // We only allow outOfOrder to OutOfOder if it is one-to-one
+                var num_of_outOfOrderIO = 0
+                m.ctrl match{
+                  case ctrl @ (_ : TightlyCoupledIOCtrl| _ : ValidIOCtrl | _: DecoupledIOCtrl)=>{
+                    output_uses_inorder = true
+                  }
+                  case ctrl:OutOfOrderIOCtrl =>{
+                    num_of_outOfOrderIO += 1
+                    if(num_of_outOfOrderIO >= 2 || m.from_modules.size > 1){
+                      output_uses_inorder = true
+                    }
+                  }
+                  case _ =>()
+                }
+              }
+
+              if(input_uses_inorder){
+                val input_buffer = Module(new InOrderToOutOfOrderQueue(chiselTypeOf(this.in), d.size_of_reorder_buffer))
+                for((str,d) <- this.in.elements){
+                  SimpleChiselTransformer.replaceAll(d.ref, input_buffer.out.bits.elements(str), this._commands)
+                }
+                SimpleChiselTransformer.replaceAll(d.in.valid.ref, input_buffer.ctrl.out.valid, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ready.ref, input_buffer.ctrl.out.ready, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ticket_num.ref, input_buffer.ctrl.out.ticket_num, this._commands)
+                input_buffer.ctrl.in.valid := d.in.valid
+                d.in.ready := input_buffer.ctrl.in.ready
+                this.in <> input_buffer.in.bits
+              }
+              else{
+                val input_buffer = Module(new OutOfOrderToOutOfOrderQueue(chiselTypeOf(this.in), d.size_of_reorder_buffer))
+                for((str,d) <- this.in.elements){
+                  SimpleChiselTransformer.replaceAll(d.ref, input_buffer.out.bits.elements(str), this._commands)
+                }
+                SimpleChiselTransformer.replaceAll(d.in.valid.ref, input_buffer.ctrl.out.valid, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ready.ref, input_buffer.ctrl.out.ready, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ticket_num.ref, input_buffer.ctrl.out.ticket_num, this._commands)
+                input_buffer.ctrl.in.valid := d.in.valid
+                d.in.ready := input_buffer.ctrl.in.ready
+                input_buffer.ctrl.in.ticket_num := d.in.ticket_num
+                this.in <> input_buffer.in.bits
+              }
+
+              if(output_uses_inorder){
+                val output_buffer = Module(new OutOfOrderToInOrderQueue(chiselTypeOf(this.in), d.size_of_reorder_buffer))
+                for((str,d) <- this.out.elements){
+                  SimpleChiselTransformer.replaceAll(d.ref, output_buffer.in.bits.elements(str), this._commands)
+                }
+                SimpleChiselTransformer.replaceAll(d.in.valid.ref, output_buffer.ctrl.in.valid, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ready.ref, output_buffer.ctrl.in.ready, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ticket_num.ref, output_buffer.ctrl.in.ticket_num, this._commands)
+                d.out.valid := output_buffer.ctrl.out.valid
+                output_buffer.ctrl.out.ready :=  d.out.ready
+                this.out <> output_buffer.out.bits
+              }
+              else{
+                val output_buffer = Module(new OutOfOrderToOutOfOrderQueue(chiselTypeOf(this.in), d.size_of_reorder_buffer))
+                for((str,d) <- this.in.elements){
+                  SimpleChiselTransformer.replaceAll(d.ref, output_buffer.in.bits.elements(str), this._commands)
+                }
+                SimpleChiselTransformer.replaceAll(d.in.valid.ref, output_buffer.ctrl.in.valid, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ready.ref, output_buffer.ctrl.in.ready, this._commands)
+                SimpleChiselTransformer.replaceAll(d.in.ticket_num.ref, output_buffer.ctrl.in.ticket_num, this._commands)
+                d.out.valid := output_buffer.ctrl.out.valid
+                output_buffer.ctrl.out.ready :=  d.out.ready
+                d.out.ticket_num := output_buffer.ctrl.out.ticket_num
+                this.out <> output_buffer.out.bits
               }
             }
           }

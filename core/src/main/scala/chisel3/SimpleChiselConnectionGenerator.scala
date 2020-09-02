@@ -247,177 +247,714 @@ object SimpleChiselConnectionGenerator{
         Decoupled Region, and Cross Region. Lock-step Region need to be reconnected first,
         then decoupled region, then Cross Region
         */
-
-        // Starting tackling lockStepRegion
-        val (allLockStepRegions, allValidIOIdx) = findLockStepRegion(rm)
-
-        for( (lockStepRegion, idx) <- allLockStepRegions.zipWithIndex){
-            if( allValidIOIdx(idx) == -1){ // There is no validIO here
-                for((m, i) <- lockStepRegion.zipWithIndex){
-                    val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
-
-                    var stuckBus: Option[Bool] = None
-                    var stallBus: Option[Arg] = None
-
-                    for((neighbor_m, j) <- lockStepRegion.zipWithIndex){
-                        if(i != j){
-                            val neighbor_ctrl = neighbor_m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
-                            if(stuckBus.isEmpty){
-                                stuckBus = Some(neighbor_ctrl.stuck)
-                            }else{
-                                stuckBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stuckBus.get.ref, neighbor_ctrl.stuck.ref), num_of_instance))
-                                num_of_instance += 1
-                            }
-                            for( cmd <- rm._commands){
-                                cmd match{
-                                    case c:Connect =>{
-                                        if(c.loc.uniqueId == neighbor_ctrl.stall.ref.uniqueId){
-                                            if(stallBus.isEmpty){
-                                                stallBus = Some(c.exp)
-                                            }else{
-                                                stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stallBus.get, c.exp), num_of_instance).ref)
-                                                num_of_instance += 1
+        for(sub_mod <- rm.simpleChiselSubModules){
+            sub_mod.ctrl match{
+                case ctrl:TightlyCoupledIOCtrlInternal =>{
+                    for(to_m <- sub_mod.to_modules){
+                        to_m.ctrl match{
+                            case c:TightlyCoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, ctrl.stall.ref, ctrl.stuck.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
                                             }
+                                            case _ =>()
                                         }
                                     }
-                                    case _ => ()
                                 }
                             }
-                        }
-                    }
-
-                    stuckBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stuckBus.get.ref, ctrl.stuck.ref), num_of_instance))
-                    num_of_instance += 1
-                    stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stuckBus.get.ref, stallBus.get), num_of_instance).ref)
-                    num_of_instance += 1
-
-                    for((cmd,j) <- rm._commands.zipWithIndex){ // Update stuck signal
-                        cmd match{
-                            case c:DefPrim[_] =>{
-                                val arg_buf = new ArrayBuffer[Arg]
-                                for(arg<- c.args){
-                                    if(arg.uniqueId == ctrl.stuck.ref.uniqueId){
-                                        arg_buf += stuckBus.get.ref
-                                    }else{
-                                        arg_buf += arg
+                            case c: ValidIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.in.valid.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val valid_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref), idx)
+                                                    connect.exp = valid_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
                                     }
                                 }
-                                rm._commands.update(j, DefPrim(c.sourceInfo, c.id, c.op, arg_buf.toSeq:_*))
                             }
-                            case c:Connect =>{
-                                if(c.exp.uniqueId == ctrl.stuck.ref.uniqueId){
-                                    c.exp = stuckBus.get.ref
+                            case c: DecoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.in.valid.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val valid_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref), idx)
+                                                    connect.exp = valid_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
                                 }
                             }
-                            case _ => ()
+                            case c: OutOfOrderIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.in.valid.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val valid_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref), idx)
+                                                    connect.exp = valid_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
                         }
                     }
-                    for( cmd <- rm._commands){
-                        cmd match{
-                            case c:Connect =>{
-                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
-                                    stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stallBus.get, c.exp), num_of_instance).ref)
-                                    num_of_instance += 1
-                                }
-                            }
-                            case _ => ()
+                    // Collect modules for fome_module
+                    val from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+                    for(from_m <- sub_mod.from_modules){
+                        if(sm != from_m){
+                            from_modules += from_m
                         }
                     }
-                    for( (cmd, j) <- rm._commands.zipWithIndex){
-                        cmd match{
-                            case c:Connect =>{
-                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
-                                    rm._commands.update(j, Connect(sourceInfo, ctrl.stall.lref, stallBus.get))
+                    for(to_m <- sub_mod.to_modules){
+                        for(from_m <- to_m.from_modules){
+                            if(sm != from_m){
+                                from_modules += from_m
+                            }
+                        }
+                    }
+
+                    for(from_m <- from_modules){
+                        from_m.ctrl match{
+                            case c :TightlyCoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, ctrl.stall.ref, ctrl.stuck.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
                                 }
                             }
-                            case _ => ()
+                            case c  : ValidIOCtrlInternal=>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, ctrl.stall.ref, ctrl.stuck.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c : DecoupledIOCtrlInternal  =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case c : OutOfOrderIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
                         }
                     }
                 }
-            }else{
-                for((m, i) <- lockStepRegion.zipWithIndex){
-                    val ctrl = m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
-
-                    var stuckBus: Option[Bool] = None
-                    var stallBus: Option[Arg] = None
-
-                    for((neighbor_m, j) <- lockStepRegion.zipWithIndex){
-                        if(i < j){
-                            val neighbor_ctrl = neighbor_m.ctrl.asInstanceOf[TightlyCoupledIOCtrlInternal]
-                            if(stuckBus.isEmpty){
-                                stuckBus = Some(neighbor_ctrl.stuck)
-                            }else{
-                                stuckBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stuckBus.get.ref, neighbor_ctrl.stuck.ref), num_of_instance))
-                                num_of_instance += 1
-                            }
-                            for( cmd <- rm._commands){
-                                cmd match{
-                                    case c:Connect =>{
-                                        if(c.loc.uniqueId == neighbor_ctrl.stall.ref.uniqueId){
-                                            if(stallBus.isEmpty){
-                                                stallBus = Some(c.exp)
-                                            }else{
-                                                stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stallBus.get, c.exp), num_of_instance).ref)
-                                                num_of_instance += 1
+                case ctrl: ValidIOCtrlInternal =>{
+                    for(to_m <- sub_mod.to_modules){
+                        to_m.ctrl match{
+                            case c:TightlyCoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, ctrl.stall.ref, ctrl.stuck.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
                                             }
+                                            case _ =>()
                                         }
                                     }
-                                    case _ => ()
                                 }
                             }
+                            case _ =>()
                         }
                     }
-
-                    stuckBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stuckBus.get.ref, ctrl.stuck.ref), num_of_instance))
-                    num_of_instance += 1
-                    stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stuckBus.get.ref, stallBus.get), num_of_instance).ref)
-                    num_of_instance += 1
-
-                    for((cmd,j) <- rm._commands.zipWithIndex){ // Update stuck signal
-                        cmd match{
-                            case c:DefPrim[_] =>{
-                                val arg_buf = new ArrayBuffer[Arg]
-                                for(arg<- c.args){
-                                    if(arg.uniqueId == ctrl.stuck.ref.uniqueId){
-                                        arg_buf += stuckBus.get.ref
-                                    }else{
-                                        arg_buf += arg
+                    // Collect modules for fome_module
+                    val from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+                    for(from_m <- sub_mod.from_modules){
+                        if(sm != from_m){
+                            from_modules += from_m
+                        }
+                    }
+                    for(from_m <- from_modules){
+                        from_m.ctrl match{
+                            case c :TightlyCoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, ctrl.stall.ref, ctrl.stuck.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
                                     }
                                 }
-                                rm._commands.update(j, DefPrim(c.sourceInfo, c.id, c.op, arg_buf.toSeq:_*))
                             }
-                            case c:Connect =>{
-                                if(c.exp.uniqueId == ctrl.stuck.ref.uniqueId){
-                                    c.exp = stuckBus.get.ref
+                            case c:ValidIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, ctrl.stall.ref, ctrl.stuck.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
                                 }
                             }
-                            case _ => ()
+                            case c : DecoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case c : OutOfOrderIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
                         }
                     }
-                    for( cmd <- rm._commands){
-                        cmd match{
-                            case c:Connect =>{
-                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
-                                    stallBus = Some(insertOp(DefPrim(sourceInfo, Bool(), BitOrOp, stallBus.get, c.exp), num_of_instance).ref)
-                                    num_of_instance += 1
-                                }
+                    val to_from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+                    for(to_m <- sub_mod.to_modules){
+                        for(from_m <- to_m.from_modules){
+                            if(sm != from_m){
+                                from_modules += from_m
                             }
-                            case _ => ()
                         }
                     }
-                    for( (cmd, j) <- rm._commands.zipWithIndex){
-                        cmd match{
-                            case c:Connect =>{
-                                if(c.loc.uniqueId == ctrl.stall.ref.uniqueId){
-                                    rm._commands.update(j, Connect(sourceInfo, ctrl.stall.lref, stallBus.get))
+                    for(from_m <- to_from_modules){
+                        from_m.ctrl match{
+                            case c :TightlyCoupledIOCtrlInternal=>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
                                 }
                             }
-                            case _ => ()
+                            case c : ValidIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c : DecoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref, validNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case c  : OutOfOrderIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stuck.ref), idx)
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.stall.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, stallNegate.ref, stuckNegate.ref, validNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
                         }
                     }
                 }
+                case ctrl :DecoupledIOCtrlInternal =>{
+                    // Collect modules for fome_module
+                    val from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+                    for(from_m <- sub_mod.from_modules){
+                        if(sm != from_m){
+                            from_modules += from_m
+                        }
+                    }
+                    for(from_m <- from_modules){
+                        from_m.ctrl match{
+                            case c :TightlyCoupledIOCtrlInternal=>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val readyNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                                                PrimOp.NegOp, ctrl.in.ready.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, readyNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c : ValidIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val readyNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                                                PrimOp.NegOp, ctrl.in.ready.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, readyNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
+                        }
+                    }
+                    val to_from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+                    for(to_m <- sub_mod.to_modules){
+                        for(from_m <- to_m.from_modules){
+                            if(sm != from_m){
+                                from_modules += from_m
+                            }
+                        }
+                    }
+                    for(from_m <- to_from_modules){
+                        from_m.ctrl match{
+                            case c:TightlyCoupledIOCtrlInternal=>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c : ValidIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c :DecoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case c : OutOfOrderIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
+                        }
+                    }
+                }
+                case ctrl:OutOfOrderIOCtrlInternal =>{
+                    // Collect modules for fome_module
+                    val from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+                    for(from_m <- sub_mod.from_modules){
+                        if(sm != from_m){
+                            from_modules += from_m
+                        }
+                    }
+                    for(from_m <- from_modules){
+                        from_m.ctrl match{
+                            case c :TightlyCoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val readyNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                                                PrimOp.NegOp, ctrl.in.ready.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, readyNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c : ValidIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val readyNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                                                PrimOp.NegOp, ctrl.in.ready.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, readyNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
+                        }
+                    }
+                    val to_from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+                    for(to_m <- sub_mod.to_modules){
+                        for(from_m <- to_m.from_modules){
+                            if(sm != from_m){
+                                from_modules += from_m
+                            }
+                        }
+                    }
+                    for(from_m <- to_from_modules){
+                        from_m.ctrl match{
+                            case c:TightlyCoupledIOCtrlInternal=>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c : ValidIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.stall.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val stall_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = stall_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>()
+                                        }
+                                    }
+                                }
+                            }
+                            case c :DecoupledIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case c : OutOfOrderIOCtrlInternal =>{
+                                breakable{
+                                    for((cmd, idx) <- rm._commands.zipWithIndex){
+                                        cmd match{
+                                            case connect:Connect =>{
+                                                if(connect.loc.uniqueId.equals(c.out.ready.ref.uniqueId)){
+                                                    val validNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.NegOp, ctrl.out.valid.ref), idx)
+                                                    val ready_compute = Builder.insertOp(
+                                                                DefPrim(UnlocatableSourceInfo, Bool(),
+                                                            PrimOp.BitOrOp, connect.exp, validNegate.ref), idx)
+                                                    connect.exp = ready_compute.ref
+                                                    break
+                                                }
+                                            }
+                                            case _ =>
+                                        }
+                                    }
+                                }
+                            }
+                            case _ =>()
+                        }
+                    }
+                } 
+                case _ => ()
             }
-               
+        
         }
     }
 
