@@ -103,25 +103,8 @@ object SimpleChiselTransformer {
       return Some(ctx)
     }
   }
-
-  def removeIfSafe(
-      id: Arg,
-      ctx: ArrayBuffer[Command]
-  ): Option[ArrayBuffer[Command]] = {
-
-    def isDefinition(id: Arg, eql: Arg => Boolean, eql2: Data => Boolean)(
-        command: Command
-    ): Boolean =
-      command match {
-        case DefPrim(_, _, _, args @ _*)  => args.forall(a => eql(a))
-        case DefInvalid(_, arg)           => eql(arg)
-        case DefWire(_, data)             => eql2(data)
-        case DefReg(_, data, _)           => eql2(data)
-        case DefRegInit(_, data, _, _, _) => eql2(data)
-        case _                            => false
-      }
-
-    def dependsOnId(cmd: Command, eql: Arg => Boolean): Boolean = cmd match {
+  private def dependsOnId(cmd: Command, eql: Arg => Boolean): Boolean =
+    cmd match {
       case Connect(_, _, exp)     => eql(exp)
       case WhenBegin(_, pred)     => eql(pred)
       case ConnectInit(_, _, exp) => eql(exp)
@@ -130,17 +113,43 @@ object SimpleChiselTransformer {
       case _                      => false
     }
 
-    def arg_equality(a: Arg) = a.uniqueId.equals(id.uniqueId)
-    ctx.find(
-      isDefinition(
-        id,
-        arg_equality,
-        b => b.ref.uniqueId.equals(id.uniqueId)
-      )
-    ) match {
+  // don't like that i'm pulling the uid out here
+  // but i can't think of a way that lets me
+  // a. return data or arg
+  // b. return a none when nothing matches
+  // might be able to make an Either work but not sure right now
+  private def getUidDef(
+      eql: Arg => Boolean,
+      eql2: Data => Boolean
+  )(
+      command: Command
+  ): Option[BigInt] =
+    command match {
+      case DefPrim(_, _, _, args @ _*) =>
+        args.find(a => eql(a)).map(a => a.uniqueId)
+      case DefInvalid(_, arg) if eql(arg)             => Some(arg.uniqueId)
+      case DefWire(_, data) if eql2(data)             => Some(data.ref.uniqueId)
+      case DefReg(_, data, _) if eql2(data)           => Some(data.ref.uniqueId)
+      case DefRegInit(_, data, _, _, _) if eql2(data) => Some(data.ref.uniqueId)
+      case _                                          => None
+    }
+
+  def removeIfSafe(
+      id: Arg,
+      ctx: ArrayBuffer[Command]
+  ): Option[ArrayBuffer[Command]] = {
+
+    def argEquality(a: Arg) = a.uniqueId.equals(id.uniqueId)
+
+    def isAMatch(c: Command) =
+      getUidDef(argEquality, b => b.ref.uniqueId.equals(id.uniqueId))(c) match {
+        case Some(value) => true
+        case None        => false
+      }
+    ctx.find(isAMatch) match {
       case None => Some(ctx)
       case Some(definition) =>
-        if (!ctx.forall(c => dependsOnId(c, arg_equality)))
+        if (!ctx.forall(c => dependsOnId(c, argEquality)))
           Option(ctx.filter(a => a.equals(definition)))
         else Option(ctx)
     }
@@ -151,8 +160,21 @@ object SimpleChiselTransformer {
       cmd: Command,
       ctx: ArrayBuffer[Command]
   ): Option[ArrayBuffer[Command]] = {
-    //TODO
-    return None
+    // is the command a def, if so all its uses need to come after
+    // if it uses other nodes, these need to be before it
+
+    val indexOfInsertion = getUidDef(a => true, a => true)(cmd) match {
+      case Some(uid) =>
+        ctx
+          .filter(c => dependsOnId(cmd, a => a.equals(uid)))
+          .map(c => ctx.indexOf(c))
+          .sorted
+          .lift(0)
+          .map(_ + 1) // put it in front of the item closest to the front that depends on it
+      case None => None
+    }
+
+    None
   }
 
   // Update functions (Optional)
