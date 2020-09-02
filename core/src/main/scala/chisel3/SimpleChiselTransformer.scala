@@ -103,7 +103,8 @@ object SimpleChiselTransformer {
       return Some(ctx)
     }
   }
-  private def dependsOnId(cmd: Command, eql: Arg => Boolean): Boolean =
+
+  private def dependsOnArg(cmd: Command, eql: Arg => Boolean): Boolean =
     cmd match {
       case Connect(_, _, exp)     => eql(exp)
       case WhenBegin(_, pred)     => eql(pred)
@@ -113,15 +114,15 @@ object SimpleChiselTransformer {
       case _                      => false
     }
 
-  // this is not exhuastive but better than last solution
-  private def getDefinitionUid(command: Command): Either[Data, Arg] =
+  private def getDefinitionUid(command: Command): Option[BigInt] =
     command match {
       // Right(args.find(a => eql(a)).map(a => a.uniqueId)) what's the id here?
-      case DefPrim(_, _, _, args @ _*)  => Right(args(0))
-      case DefInvalid(_, arg)           => Right(arg)
-      case DefWire(_, data)             => Left(data)
-      case DefReg(_, data, _)           => Left(data)
-      case DefRegInit(_, data, _, _, _) => Left(data)
+      case DefPrim(_, _, _, args @ _*)  => Some(args(0).uniqueId)
+      case DefInvalid(_, arg)           => Some(arg.uniqueId)
+      case DefWire(_, data)             => Some(data.ref.uniqueId)
+      case DefReg(_, data, _)           => Some(data.ref.uniqueId)
+      case DefRegInit(_, data, _, _, _) => Some(data.ref.uniqueId)
+      case _                            => None
     }
 
   def removeIfSafe(
@@ -132,13 +133,13 @@ object SimpleChiselTransformer {
     def argEquality(a: Arg) = a.uniqueId.equals(id.uniqueId)
 
     def matchesUID(c: Command) = getDefinitionUid(c) match {
-      case Left(data) => data.ref.uniqueId.equals(id.uniqueId)
-      case Right(arg) => argEquality(arg)
+      case Some(value) => value.equals(id.uniqueId)
+      case None        => false
     }
     ctx.find(matchesUID) match {
       case None => Some(ctx)
       case Some(definition) =>
-        if (!ctx.forall(c => dependsOnId(c, argEquality)))
+        if (!ctx.forall(c => dependsOnArg(c, argEquality)))
           Option(ctx.filter(a => a.equals(definition)))
         else Option(ctx)
     }
@@ -152,20 +153,26 @@ object SimpleChiselTransformer {
     // is the command a def, if so all its uses need to come after
     // if it uses other nodes, these need to be before it
 
-    val uid = getDefinitionUid(cmd) match {
-      case Left(data) => data.ref.uniqueId
-      case Right(arg) => arg.uniqueId
+    val ourFirstDependent = getDefinitionUid(cmd) match {
+      case Some(uid) =>
+        ctx
+          .filter(c => dependsOnArg(cmd, a => a.equals(uid)))
+          .map(c => ctx.indexOf(c))
+          .lift(0)
+          .map(_ + 1) // put it in front of the item closest to the front that depends on it
+
+      case None => None
     }
 
-    ctx
-      .filter(c => dependsOnId(cmd, a => a.equals(uid)))
-      .map(c => ctx.indexOf(c))
-      .sorted
-      .lift(0)
-      .map(
-        _ + 1
-      ) // put it in front of the item closest to the front that depends on it
+    val ourLastDependency = ctx
+      .map(c => getDefinitionUid(c))
+      .map(id => dependsOnArg(cmd, a => a.equals(id)))
+      .zipWithIndex
+      .reverse
+      .find(((a: Boolean, b: Int) => a).tupled)
 
+    // basically insert using the two vars from above. thinking about how to use them
+    //ctx.insert()
     None
   }
 
