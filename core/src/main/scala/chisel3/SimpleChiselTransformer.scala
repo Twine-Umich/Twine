@@ -103,21 +103,28 @@ object SimpleChiselTransformer {
       return Some(ctx)
     }
   }
-
-  private def dependsOnArg(cmd: Command, eql: Arg => Boolean): Boolean =
+  private def dependsOnArg(
+      cmd: Command,
+      eql: Arg => Boolean,
+      eql2: Node => Boolean
+  ): Boolean =
     cmd match {
-      case Connect(_, _, exp)     => eql(exp)
+      case Connect(_, n, exp)     => eql(exp) && eql2(n)
+      case BulkConnect(_, n1, n2) => eql2(n1) && eql2(n2)
+      case Attach(_, ns)          => ns.forall(eql2)
+      case ConnectInit(_, n, arg) => eql(arg) && eql2(n)
       case WhenBegin(_, pred)     => eql(pred)
-      case ConnectInit(_, _, exp) => eql(exp)
       case Stop(_, clock, _)      => eql(clock)
       case Printf(_, clock, _)    => eql(clock)
-      case _                      => false
+      case DefRegInit(_, _, clock, reset, init) =>
+        eql(clock) && eql(reset) && eql(init)
+      case DefPrim(_, _, _, args @ _*) => args.forall(eql)
+      case _                           => false
     }
 
   private def getDefinitionUid(command: Command): Option[BigInt] =
     command match {
-      // Right(args.find(a => eql(a)).map(a => a.uniqueId)) what's the id here?
-      case DefPrim(_, _, _, args @ _*)  => Some(args(0).uniqueId)
+      case DefPrim(_, id, _, _)         => Some(id.ref.uniqueId)
       case DefInvalid(_, arg)           => Some(arg.uniqueId)
       case DefWire(_, data)             => Some(data.ref.uniqueId)
       case DefReg(_, data, _)           => Some(data.ref.uniqueId)
@@ -130,16 +137,18 @@ object SimpleChiselTransformer {
       ctx: ArrayBuffer[Command]
   ): Option[ArrayBuffer[Command]] = {
 
-    def argEquality(a: Arg) = a.uniqueId.equals(id.uniqueId)
-
-    def matchesUID(c: Command) = getDefinitionUid(c) match {
-      case Some(value) => value.equals(id.uniqueId)
-      case None        => false
-    }
-    ctx.find(matchesUID) match {
+    ctx.find(c =>
+      getDefinitionUid(c).map(a => a.equals(id.uniqueId)).getOrElse(false)
+    ) match {
       case None => Some(ctx)
       case Some(definition) =>
-        if (!ctx.forall(c => dependsOnArg(c, argEquality)))
+        if (!ctx.forall(c =>
+              dependsOnArg(
+                c,
+                a => a.uniqueId.equals(id.uniqueId),
+                n => n.uniqueId.equals(id.uniqueId)
+              )
+            ))
           Option(ctx.filter(a => a.equals(definition)))
         else Option(ctx)
     }
@@ -156,10 +165,12 @@ object SimpleChiselTransformer {
     val ourFirstDependent = getDefinitionUid(cmd) match {
       case Some(uid) =>
         ctx
-          .filter(c => dependsOnArg(cmd, a => a.equals(uid)))
+          .filter(c =>
+            dependsOnArg(c, a => a.equals(uid), n => n.uniqueId.equals(uid))
+          )
           .map(c => ctx.indexOf(c))
           .lift(0)
-          .map(_ + 1)
+          .map(_ - 1)
           .getOrElse(ctx.length)
 
       case None => ctx.length
@@ -167,7 +178,9 @@ object SimpleChiselTransformer {
 
     val ourLastDependency = ctx
       .map(c => getDefinitionUid(c))
-      .map(id => dependsOnArg(cmd, a => a.equals(id)))
+      .map(id =>
+        dependsOnArg(cmd, a => a.equals(id), n => n.uniqueId.equals(id))
+      )
       .zipWithIndex
       .reverse
       .find(((a: Boolean, b: Int) => a).tupled) match {
