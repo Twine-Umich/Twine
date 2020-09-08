@@ -96,7 +96,7 @@ trait OutOfOrderInterfaceInternal{
 abstract trait NoIOCtrlInternal{}
 
 abstract trait TightlyCoupledIOCtrlInternal extends SimpleChiselIOCtrlInternal{
-    def num_of_cycles: Int
+    def delay: Int
     def stall: Bool
     def stuck: Bool  
     def valid_input: Bool

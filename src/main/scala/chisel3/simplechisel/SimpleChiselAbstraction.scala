@@ -76,16 +76,16 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
         }
         ctrl match{
           case d:TightlyCoupledIOCtrl =>{
-            if(d.num_of_cycles > 0){
-              val tightlyCoupledQ = Reg(Vec(d.num_of_cycles, Bool()))
+            if(d.delay > 0){
+              val tightlyCoupledQ = Reg(Vec(d.delay, Bool()))
               when( (d.stall||d.stuck) ){
                 tightlyCoupledQ(0) := tightlyCoupledQ(0)
                 d.valid_output := false.B
               }.otherwise{
                 tightlyCoupledQ(0) := d.valid_input
-                d.valid_output := tightlyCoupledQ(d.num_of_cycles - 1)
+                d.valid_output := tightlyCoupledQ(d.delay - 1)
               }
-              for(i <- 1 until d.num_of_cycles){
+              for(i <- 1 until d.delay){
                 when( (d.stall||d.stuck)){
                   tightlyCoupledQ(i) := tightlyCoupledQ(i-1)
                 }.otherwise{

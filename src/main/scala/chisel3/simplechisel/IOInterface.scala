@@ -52,7 +52,7 @@ class NoIOCtrl extends SimpleChiselIOCtrl with NoIOCtrlInternal{
 
 }
 
-class TightlyCoupledIOCtrl(val num_of_cycles: Int) extends  SimpleChiselIOCtrl with TightlyCoupledIOCtrlInternal{
+class TightlyCoupledIOCtrl(val delay: Int) extends  SimpleChiselIOCtrl with TightlyCoupledIOCtrlInternal{
     val stall = Input(Bool())
     val clear = Input(Bool())
     val stuck = Output(Bool())
