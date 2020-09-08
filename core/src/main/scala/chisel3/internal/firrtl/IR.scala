@@ -14,7 +14,6 @@ import _root_.firrtl.PrimOps
 import scala.collection.immutable.NumericRange
 import scala.math.BigDecimal.RoundingMode
 
-// scalastyle:off number.of.types
 
 case class PrimOp(name: String) {
   override def toString: String = name
@@ -65,19 +64,20 @@ object PrimOp {
   val AsAsyncResetOp = PrimOp("asAsyncReset")
 }
 
-abstract class Arg {
+abstract class Arg(in_uniqueId: Option[BigInt] = None) {
   def fullName(ctx: Component): String = name
   def name: String
+  var uniqueId: BigInt = in_uniqueId.getOrElse(Builder.uniqueId)
 }
 
-case class Node(id: HasId) extends Arg {
+case class Node(id: HasId, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId) {
   override def fullName(ctx: Component): String = id.getOptionRef match {
     case Some(arg) => arg.fullName(ctx)
-    case None => id.suggestedName.getOrElse("??")
+    case None => id.instanceName
   }
   def name: String = id.getOptionRef match {
     case Some(arg) => arg.name
-    case None => id.suggestedName.getOrElse("??")
+    case None => id.instanceName
   }
 }
 
@@ -95,7 +95,7 @@ abstract class LitArg(val num: BigInt, widthArg: Width) extends Arg {
   protected def minWidth: Int
   if (forcedWidth) {
     require(widthArg.get >= minWidth,
-      s"The literal value ${num} was elaborated with a specified width of ${widthArg.get} bits, but at least ${minWidth} bits are required.") // scalastyle:ignore line.size.limit
+      s"The literal value ${num} was elaborated with a specified width of ${widthArg.get} bits, but at least ${minWidth} bits are required.")
   }
 }
 
@@ -138,16 +138,16 @@ case class IntervalLit(n: BigInt, w: Width, binaryPoint: BinaryPoint) extends Li
   def minWidth: Int = 1 + n.bitLength
 }
 
-case class Ref(name: String) extends Arg
-case class ModuleIO(mod: BaseModule, name: String) extends Arg {
+case class Ref(name: String, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId)
+case class ModuleIO(mod: BaseModule, name: String, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId){
   override def fullName(ctx: Component): String =
     if (mod eq ctx.id) name else s"${mod.getRef.name}.$name"
 }
-case class Slot(imm: Node, name: String) extends Arg {
+case class Slot(imm: Node, name: String, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId){
   override def fullName(ctx: Component): String =
     if (imm.fullName(ctx).isEmpty) name else s"${imm.fullName(ctx)}.${name}"
 }
-case class Index(imm: Arg, value: Arg) extends Arg {
+case class Index(imm: Arg, value: Arg, in_uniqueId: Option[BigInt] = None) extends Arg(in_uniqueId){
   def name: String = s"[$value]"
   override def fullName(ctx: Component): String = s"${imm.fullName(ctx)}[${value.fullName(ctx)}]"
 }
@@ -359,7 +359,6 @@ object IntervalRange {
     }
   }
 
-  //scalastyle:off method.name
   def Unknown: IntervalRange = range"[?,?].?"
 }
 
@@ -390,7 +389,6 @@ sealed class IntervalRange(
     case _ =>
   }
 
-  //scalastyle:off cyclomatic.complexity
   override def toString: String = {
     val binaryPoint = firrtlBinaryPoint match {
       case firrtlir.IntWidth(n) => s"$n"
@@ -718,27 +716,33 @@ abstract class Definition extends Command {
   def id: HasId
   def name: String = id.getRef.name
 }
-// scalastyle:off line.size.limit
 case class DefPrim[T <: Data](sourceInfo: SourceInfo, id: T, op: PrimOp, args: Arg*) extends Definition
 case class DefInvalid(sourceInfo: SourceInfo, arg: Arg) extends Command
 case class DefWire(sourceInfo: SourceInfo, id: Data) extends Definition
 case class DefReg(sourceInfo: SourceInfo, id: Data, clock: Arg) extends Definition
-case class DefRegInit(sourceInfo: SourceInfo, id: Data, clock: Arg, reset: Arg, init: Arg) extends Definition
+case class DefRegInit(sourceInfo: SourceInfo, id: Data, clock: Arg, reset: Arg, var init: Arg) extends Definition
 case class DefMemory(sourceInfo: SourceInfo, id: HasId, t: Data, size: BigInt) extends Definition
 case class DefSeqMemory(sourceInfo: SourceInfo, id: HasId, t: Data, size: BigInt, readUnderWrite: fir.ReadUnderWrite.Value) extends Definition
 case class DefMemPort[T <: Data](sourceInfo: SourceInfo, id: T, source: Node, dir: MemPortDirection, index: Arg, clock: Arg) extends Definition
 case class DefInstance(sourceInfo: SourceInfo, id: BaseModule, ports: Seq[Port]) extends Definition
-case class WhenBegin(sourceInfo: SourceInfo, pred: Arg) extends Command
+case class WhenBegin(sourceInfo: SourceInfo, var pred: Arg) extends Command
 case class WhenEnd(sourceInfo: SourceInfo, firrtlDepth: Int, hasAlt: Boolean = false) extends Command
 case class AltBegin(sourceInfo: SourceInfo) extends Command
 case class OtherwiseEnd(sourceInfo: SourceInfo, firrtlDepth: Int) extends Command
-case class Connect(sourceInfo: SourceInfo, loc: Node, var exp: Arg) extends Command
+case class Connect(sourceInfo: SourceInfo,var loc: Node, var exp: Arg) extends Command
 case class BulkConnect(sourceInfo: SourceInfo, loc1: Node, loc2: Node) extends Command
 case class Attach(sourceInfo: SourceInfo, locs: Seq[Node]) extends Command
-case class ConnectInit(sourceInfo: SourceInfo, loc: Node, exp: Arg) extends Command
+case class ConnectInit(sourceInfo: SourceInfo,var loc: Node,var exp: Arg) extends Command
 case class Stop(sourceInfo: SourceInfo, clock: Arg, ret: Int) extends Command
 case class Port(id: Data, dir: SpecifiedDirection)
 case class Printf(sourceInfo: SourceInfo, clock: Arg, pable: Printable) extends Command
+object Formal extends Enumeration {
+  val Assert = Value("assert")
+  val Assume = Value("assume")
+  val Cover = Value("cover")
+}
+case class Verification(op: Formal.Value, sourceInfo: SourceInfo, clock: Arg,
+                        predicate: Arg, message: String) extends Command
 abstract class Component extends Arg {
   def id: BaseModule
   def name: String

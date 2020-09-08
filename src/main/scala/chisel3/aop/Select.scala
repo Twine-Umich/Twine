@@ -21,7 +21,7 @@ object Select {
     * @return
     */
   def getLeafs(d: Data): Seq[Data] = d match {
-    case b: Bundle => b.getElements.flatMap(getLeafs)
+    case r: Record => r.getElements.flatMap(getLeafs)
     case v: Vec[_] => v.getElements.flatMap(getLeafs)
     case other => Seq(other)
   }
@@ -32,7 +32,7 @@ object Select {
     * @return
     */
   def getIntermediateAndLeafs(d: Data): Seq[Data] = d match {
-    case b: Bundle => b +: b.getElements.flatMap(getIntermediateAndLeafs)
+    case r: Record => r +: r.getElements.flatMap(getIntermediateAndLeafs)
     case v: Vec[_] => v +: v.getElements.flatMap(getIntermediateAndLeafs)
     case other => Seq(other)
   }
@@ -231,14 +231,14 @@ object Select {
         case cmd: Definition if cmd.id.isInstanceOf[Data] =>
           val x = getIntermediateAndLeafs(cmd.id.asInstanceOf[Data])
           if(x.contains(signal)) prePredicates = preds
-        case Connect(_, loc@Node(d: Data), exp) =>
+        case Connect(_, loc@Node(d: Data, _), exp) =>
           val effected = getEffected(loc).toSet
           if(sensitivitySignals.intersect(effected).nonEmpty) {
             val expData = getData(exp)
             prePredicates.reverse.zip(preds.reverse).foreach(x => assert(x._1 == x._2, s"Prepredicates $x must match for signal $signal"))
             predicatedConnects += PredicatedConnect(preds.dropRight(prePredicates.size), d, expData, isBulk = false)
           }
-        case BulkConnect(_, loc@Node(d: Data), exp) =>
+        case BulkConnect(_, loc@Node(d: Data, _), exp) =>
           val effected = getEffected(loc).toSet
           if(sensitivitySignals.intersect(effected).nonEmpty) {
             val expData = getData(exp)
@@ -291,14 +291,14 @@ object Select {
 
   // Given a loc, return all subcomponents of id that could be assigned to in connect
   private def getEffected(a: Arg): Seq[Data] = a match {
-    case Node(id: Data) => getIntermediateAndLeafs(id)
-    case Slot(imm, name) => Seq(imm.id.asInstanceOf[Record].elements(name))
-    case Index(imm, value) => getEffected(imm)
+    case Node(id: Data, _) => getIntermediateAndLeafs(id)
+    case Slot(imm, name, _) => Seq(imm.id.asInstanceOf[Record].elements(name))
+    case Index(imm, value, _) => getEffected(imm)
   }
 
   // Given an arg, return the corresponding id. Don't use on a loc of a connect.
   private def getId(a: Arg): HasId = a match {
-    case Node(id) => id
+    case Node(id, _) => id
     case l: ULit => l.num.U(l.w)
     case l: SLit => l.num.S(l.w)
     case l: FPLit => FixedPoint(l.num, l.w, l.binaryPoint)
@@ -307,7 +307,7 @@ object Select {
   }
 
   private def getData(a: Arg): Data = a match {
-    case Node(data: Data) => data
+    case Node(data: Data, _) => data
     case other =>
       sys.error(s"Something went horribly wrong! I was expecting ${other} to be Data!")
   }
@@ -332,7 +332,7 @@ object Select {
       (blah, cmd) =>
         (blah, cmd) match {
           case ((preds, o), cmd) => cmd match {
-            case WhenBegin(_, Node(pred: Bool)) => (When(pred) +: preds, None)
+            case WhenBegin(_, Node(pred: Bool, _)) => (When(pred) +: preds, None)
             case WhenBegin(_, l: LitArg) if l.num == BigInt(1) => (When(true.B) +: preds, None)
             case WhenBegin(_, l: LitArg) if l.num == BigInt(0) => (When(false.B) +: preds, None)
             case other: WhenBegin =>

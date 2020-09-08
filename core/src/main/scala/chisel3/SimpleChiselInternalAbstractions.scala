@@ -9,8 +9,9 @@ import chisel3.internal._
 import chisel3.internal.Builder._
 import chisel3.internal.firrtl._
 import chisel3.internal.sourceinfo._
+import scala.collection.mutable.{ListBuffer, HashMap, ArrayBuffer}
 
-  /** Abstract base class for simpleChiselConnectionMap that contain Chisel RTL.
+  /** Abstract base class for simpleChiselModule that contain Chisel RTL.
   * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
   * multiple IO() declarations.
   */
@@ -21,6 +22,9 @@ trait SimpleChiselModuleTrait{
   def out: Record
   def ctrl: Record
 
+  val to_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+  val from_modules = new ArrayBuffer[SimpleChiselModuleTrait]
+
   def >>>(that: Aggregate): Aggregate
   def >>>[T <: SimpleChiselModuleTrait](that: T): T
 }
@@ -30,29 +34,49 @@ trait SimpleChiselModuleTrait{
   * multiple IO() declarations.
   */
 abstract class SimpleChiselModuleInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends LegacyModule with SimpleChiselModuleTrait{
+    extends MultiIOModule with SimpleChiselModuleTrait{
       private[chisel3] def generateSimpleChiselComponent: Any
+      // These are to be phased out
+      protected var override_clock: Option[Clock] = None
+      protected var override_reset: Option[Bool] = None
+
+      // Allow access to bindings from the compatibility package
+      // protected def _compatIoPortBound() = portsContains(io)// scalastyle:ignore method.name
+
+      private[chisel3] override def namePorts(names: HashMap[HasId, String]): Unit = {
+        for (port <- getModulePorts) {
+          // This should already have been caught
+          if (!names.contains(port)) throwException(s"Unable to name port $port in $this")
+          val name = names(port)
+          port.setRef(ModuleIO(this, _namespace.name(name)))
+        }
+      }
+
+      private[chisel3] override def generateComponent(): Component = {
+        _compatAutoWrapPorts()  // pre-IO(...) compatibility hack
+
+        require((portsContains(clock)) && (portsContains(reset)), "Internal error, module did not have clock or reset as IO") // scalastyle:ignore line.size.limit
+
+        super.generateComponent()
+      }
+
+      private[chisel3] override def initializeInParent(parentCompileOptions: CompileOptions): Unit = {
+        // Don't generate source info referencing parents inside a module, since this interferes with
+        // module de-duplication in FIRRTL emission.
+        implicit val sourceInfo = UnlocatableSourceInfo
+
+        // if (!parentCompileOptions.explicitInvalidate) {
+        //   pushCommand(DefInvalid(sourceInfo, io.ref))
+        // }
+
+        clock := override_clock.getOrElse(Builder.forcedClock)
+        reset := override_reset.getOrElse(Builder.forcedReset)
+      }
     }
 
-/** Abstract base class for SimpleChiselState that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract class SimpleChiselStateInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends State with SimpleChiselModuleTrait{
-      private[chisel3] def generateSimpleChiselComponent: Any
-    }
-
-/** Abstract base class for SimpleChiselLogic that contain Chisel RTL.
-  * This abstract base class is a user-defined module which does not include implicit clock and reset and supports
-  * multiple IO() declarations.
-  */
-abstract class SimpleChiselLogicInternal(implicit moduleCompileOptions: CompileOptions) 
-    extends Logic with SimpleChiselModuleTrait{
-      private[chisel3] def generateSimpleChiselComponent: Any
-    }
-
-trait SimpleChiselIOCtrlInternal{}
+trait SimpleChiselIOCtrlInternal{
+  def clear: Bool
+}
 
 trait ValidInterfaceInternal{
     def valid: Bool
@@ -71,29 +95,30 @@ trait OutOfOrderInterfaceInternal{
 
 abstract trait NoIOCtrlInternal{}
 
-abstract trait TightlyCoupledIOCtrlInternal{
-    def num_of_cycles: Int
+abstract trait TightlyCoupledIOCtrlInternal extends SimpleChiselIOCtrlInternal{
+    def delay: Int
     def stall: Bool
-    def clear: Bool
     def stuck: Bool  
+    def valid_input: Bool
+    def valid_output: Bool
 }
 
-abstract trait ValidIOCtrlInternal{
+abstract trait ValidIOCtrlInternal extends SimpleChiselIOCtrlInternal{
     def in: ValidInterfaceInternal
     def out: ValidInterfaceInternal
     def stall: Bool
-    def clear: Bool
     def stuck: Bool
 }
 
-abstract trait DecoupledIOCtrlInternal{
+abstract trait DecoupledIOCtrlInternal extends SimpleChiselIOCtrlInternal{
+    def size_of_receiving_buffer: Int
+    def size_of_sending_buffer: Int
     def in: DecoupledInterfaceInternal
     def out: DecoupledInterfaceInternal
-    def clear: Bool
 }
 
-abstract trait OutOfOrderIOCtrlInternal{
+abstract trait OutOfOrderIOCtrlInternal extends SimpleChiselIOCtrlInternal{
+  def size_of_reorder_buffer: Int
   def in: OutOfOrderInterfaceInternal
   def out: OutOfOrderInterfaceInternal
-  def clear: Bool
 }

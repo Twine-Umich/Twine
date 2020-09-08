@@ -41,7 +41,7 @@ abstract class Element extends Data {
   private[chisel3] def litIsForcedWidth: Option[Boolean] = litArgOption.map(_.forcedWidth)
 
   // provide bits-specific literal handling functionality here
-  override private[chisel3] def ref: Arg = topBindingOpt match {
+  override def ref: Arg = topBindingOpt match {
     case Some(ElementLitBinding(litArg)) => litArg
     case Some(BundleLitBinding(litMap)) => litMap.get(this) match {
       case Some(litArg) => litArg

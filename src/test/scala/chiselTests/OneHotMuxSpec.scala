@@ -11,7 +11,6 @@ import org.scalatest._
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 
-//scalastyle:off magic.number
 
 class OneHotMuxSpec extends AnyFreeSpec with Matchers with ChiselRunners {
   "simple one hot mux with uint should work" in {
@@ -53,7 +52,7 @@ class OneHotMuxSpec extends AnyFreeSpec with Matchers with ChiselRunners {
   "UIntToOH should not accept width of zero (until zero-width wires are fixed" in {
     try {
       assertTesterPasses(new BasicTester {
-        val out = UIntToOH(0.U, 0)
+        val m_out = UIntToOH(0.U, 0)
       })
     } catch {
       case a: ChiselException => a.getCause match {
@@ -65,59 +64,59 @@ class OneHotMuxSpec extends AnyFreeSpec with Matchers with ChiselRunners {
 }
 
 class SimpleOneHotTester extends BasicTester {
-  val out = Wire(UInt())
-  out := Mux1H(Seq(
+  val m_out = Wire(UInt())
+  m_out := Mux1H(Seq(
     false.B -> 2.U,
     false.B -> 4.U,
     true.B  -> 8.U,
     false.B -> 11.U
   ))
 
-  assert(out === 8.U)
+  assert(m_out === 8.U)
 
   stop()
 }
 
 class SIntOneHotTester extends BasicTester {
-  val out = Wire(SInt())
-  out := Mux1H(Seq(
+  val m_out = Wire(SInt())
+  m_out := Mux1H(Seq(
     false.B -> (-3).S,
     true.B  -> (-5).S,
     false.B -> (-7).S,
     false.B -> (-11).S
   ))
 
-  assert(out === (-5).S)
+  assert(m_out === (-5).S)
 
   stop()
 }
 
 class FixedPointOneHotTester extends BasicTester {
-  val out = Wire(FixedPoint(8.W, 4.BP))
+  val m_out = Wire(FixedPoint(8.W, 4.BP))
 
-  out := Mux1H(Seq(
+  m_out := Mux1H(Seq(
     false.B -> (-1.5).F(1.BP),
     true.B  -> (-2.25).F(2.BP),
     false.B -> (-4.125).F(3.BP),
     false.B -> (-11.625).F(3.BP)
   ))
 
-  assert(out === (-2.25).F(4.BP))
+  assert(m_out === (-2.25).F(4.BP))
 
   stop()
 }
 
 class AllSameFixedPointOneHotTester extends BasicTester {
-  val out = Wire(FixedPoint(12.W, 3.BP))
+  val m_out = Wire(FixedPoint(12.W, 3.BP))
 
-  out := Mux1H(Seq(
+  m_out := Mux1H(Seq(
     false.B -> (-1.5).F(12.W, 3.BP),
     true.B  -> (-2.25).F(12.W, 3.BP),
     false.B -> (-4.125).F(12.W, 3.BP),
     false.B -> (-11.625).F(12.W, 3.BP)
   ))
 
-  assert(out === (-2.25).F(14.W, 4.BP))
+  assert(m_out === (-2.25).F(14.W, 4.BP))
 
   stop()
 }
@@ -306,9 +305,9 @@ class DifferentBundleOneHotTester extends BasicTester {
 }
 
 class UIntToOHTester extends BasicTester {
-  val out = UIntToOH(1.U, 3)
-  require(out.getWidth == 3)
-  assert(out === 2.U)
+  val m_out = UIntToOH(1.U, 3)
+  require(m_out.getWidth == 3)
+  assert(m_out === 2.U)
 
   val out2 = UIntToOH(0.U, 1)
   require(out2.getWidth == 1)
