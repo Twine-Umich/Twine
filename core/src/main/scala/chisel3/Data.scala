@@ -8,7 +8,7 @@ import chisel3.internal.Builder.pushCommand
 import chisel3.internal._
 import chisel3.internal.firrtl._
 import chisel3.internal.sourceinfo.{DeprecatedSourceInfo, SourceInfo, SourceInfoTransform, UnlocatableSourceInfo}
-
+import chisel3.simplechisel._
 /** User-specified directions.
   */
 sealed abstract class SpecifiedDirection
@@ -557,7 +557,18 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     * @param that the $coll to connect to
     * @group Connect
     */
-  def >>> (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): Unit = that.connect(this)(sourceInfo, connectionCompileOptions) // scalastyle:ignore line.size.limit
+  def >>> (that: Data)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): Unit = {
+      that match{
+        case aggregate: Aggregate =>{
+          if(aggregate.getElements.size >1){
+            throwException("Too many elements")
+          }else{
+            aggregate.getElements(0).connect(this)(sourceInfo, connectionCompileOptions)
+          }
+        }
+        case _ => that.connect(this)(sourceInfo, connectionCompileOptions)
+      } 
+    }
 
   @chiselRuntimeDeprecated
   @deprecated("litArg is deprecated, use litOption or litTo*Option", "3.2")

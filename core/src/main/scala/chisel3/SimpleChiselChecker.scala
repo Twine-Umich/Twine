@@ -105,8 +105,6 @@ object SimpleChiselChecker{
                         hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> lists.size)
                         pos_of_ready_out = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.clear.getRef.fullName(d)}" -> lists.size)
-                        lists += new ListBuffer[Int]()
                     }
                     case ctrl: OutOfOrderIOCtrlInternal =>{
                         continue = true
@@ -121,8 +119,6 @@ object SimpleChiselChecker{
                         lists += new ListBuffer[Int]()
                         hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> lists.size)
                         pos_of_ready_out = lists.size
-                        lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.clear.getRef.fullName(d)}" -> lists.size)
                         lists += new ListBuffer[Int]()
                         hashMap += (s"${ctrl.in.ticket_num.getRef.fullName(d)}" -> lists.size)
                         lists += new ListBuffer[Int]()

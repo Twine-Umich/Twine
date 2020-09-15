@@ -55,6 +55,20 @@ object Module extends SourceInfoDoc {
     //   - set currentClockAndReset
     val module: T = bc  // bc is actually evaluated here
 
+    if(parent.isDefined){
+      parent.get match{
+        case sm: SimpleChiselModuleInternal =>{
+          module match{
+            case sub_sm: SimpleChiselModuleInternal =>{
+              sm.sub_modules += sub_sm
+            }
+            case _ => ()
+          }
+        }
+        case _ => ()
+      }
+    }
+    
     if (Builder.whenDepth != 0) {
       throwException("Internal Error! when() scope depth is != 0, this should have been caught!")
     }
@@ -67,17 +81,9 @@ object Module extends SourceInfoDoc {
     module match {
       case m:SimpleChiselModuleInternal =>{
         // Generate queue and buffers
-         val md = module.asInstanceOf[SimpleChiselModuleInternal]
-         md.generateSimpleChiselComponent
+         SimpleChiselConnGen.generate(m)
+         m.generateSimpleChiselComponent
         }
-      case _ =>()
-    }
-
-    module match{
-      case sm:SimpleChiselModuleTrait =>{
-        // Generate necessary connection logic
-        SimpleChiselConnectionGenerator.generate(module)
-      }
       case _ =>()
     }
 
@@ -87,19 +93,6 @@ object Module extends SourceInfoDoc {
     Builder.currentReset = saveReset
 
     var component = module.generateComponent()
-
-    parent match{
-      case Some(m) => {
-        module match{
-          case s:SimpleChiselModuleTrait =>{ 
-            //If this is a SimpleChiselModule, there are auto-connection to do at the high-level
-            m.simpleChiselSubModules += s
-          }
-          case _ =>()
-        }
-      }
-      case None => ()
-    }
 
     // Check certain logic
     SimpleChiselChecker.simpleChiselCtrlCheck(component)
@@ -197,7 +190,6 @@ package experimental {
   // TODO: seal this?
   abstract class BaseModule extends HasId {
     // ArrayBuffer for simpleChisel
-    val simpleChiselSubModules = new ListBuffer[chisel3.simplechisel.SimpleChiselModuleTrait]
     val simpleChiselConnectionPairs = new ListBuffer[(Data, Data)]
     //
     // Builder Internals - this tracks which Module RTL construction belongs to.

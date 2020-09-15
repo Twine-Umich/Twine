@@ -3,7 +3,7 @@
 package chisel3
 
 import scala.collection.immutable.ListMap
-import scala.collection.mutable.{HashSet, LinkedHashMap}
+import scala.collection.mutable.{HashSet, LinkedHashMap, ArrayBuffer}
 import scala.language.experimental.macros
 
 import chisel3.experimental.BaseModule
@@ -21,8 +21,6 @@ class AliasedAggregateFieldException(message: String) extends ChiselException(me
   * of) other Data objects.
   */
 sealed abstract class Aggregate extends Data {
-  var to_module: Option[SimpleChiselModuleTrait] = None
-  var from_module: Option[SimpleChiselModuleTrait] = None
 
   private[chisel3] override def bind(target: Binding, parentDirection: SpecifiedDirection) { 
     binding = target
@@ -80,23 +78,23 @@ sealed abstract class Aggregate extends Data {
       * @param that the $coll to connect to
       * @group Connect
       */
-  def >>>[T <: SimpleChiselModuleTrait](that: T)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): T = {
+  def >>>[T <: SimpleChiselModuleInternal](that: T)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): T = {
     implicit val sourceInfo = UnlocatableSourceInfo
-    // val input_ports = that.in.getElements
-    // val output_ports = this.getElements
-    // if(input_ports.size != output_ports.size){
-    //   throwException("The input does not match with outputs")
-    // }
-    // for((input_port, idx) <- input_ports.zipWithIndex){
-    //   input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)
-    // }
+
     this >>> that.in
-    this.to_module = Some(that)
-    this.from_module match{
-      case Some(m) =>{
-        that.from_modules += m
+    if(this._parent.isDefined){
+      this._parent.get match{
+        case sm: SimpleChiselModuleInternal =>{
+          if (!sm.to_modules.contains(that)) sm.to_modules += that
+          if(!that.from_modules.contains(sm)) that.from_modules += sm
+          if(sm.sub_modules.contains(that)){
+            if (!this.to_modules.contains(that) ) this.to_modules += that
+            for(elt <- this.getElements)
+              if (!elt.to_modules.contains(that)) elt.to_modules += that
+          }
+        }
+        case _ =>()
       }
-      case None => ()
     }
     that
   }
@@ -112,7 +110,7 @@ sealed abstract class Aggregate extends Data {
     val input_ports = that.getElements
     val output_ports = this.getElements
     if(input_ports.size != output_ports.size){
-      throwException("The input does not match with outputs")
+      throwException(s"The input port size ${input_ports.size} does not match with outputs ${output_ports.size}")
     }
     for((input_port, idx) <- input_ports.zipWithIndex){
       input_port.connect(output_ports(idx))(sourceInfo, connectionCompileOptions)

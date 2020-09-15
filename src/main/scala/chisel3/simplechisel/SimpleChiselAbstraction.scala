@@ -29,7 +29,7 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
     * @param that the $coll to connect to
     * @group Connect
     */
-    override def >>>[T <: SimpleChiselModuleTrait](that: T): T ={
+    override def >>>[T <: SimpleChiselModuleInternal](that: T): T ={
         implicit val sourceInfo = UnlocatableSourceInfo
         val input_ports = that.in.getElements
         val output_ports = this.out.getElements
@@ -43,18 +43,23 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
               (sink_sub, source_sub) match{
                 case(sink_vec: Vec[Data @unchecked], source_e: Element) =>{
                   val parallelizer = Module(new Parallelizer(source_e, sink_vec.length))
-                  this.ctrl >>> parallelizer.ctrl >>> that.ctrl
                   parallelizer.in.bits := source_e
                   sink_vec := parallelizer.out.bits
+                  this.to_modules +=  parallelizer
+                  that.from_modules +=  parallelizer
                 }
                 case(sink_e: Element, source_vec: Vec[Data @unchecked]) =>{
                   val serializer = Module(new Serializer(sink_e, source_vec.length))
-                  this.ctrl >>> serializer.ctrl >>> that.ctrl
                   serializer.in.bits := source_vec
                   sink_e := serializer.out.bits
+                  this.to_modules += serializer
+                  that.from_modules += serializer
                 } // Add the transformation cases
-                case _ =>
+                case _ =>{
                   sink_sub.connect(source_sub)(sourceInfo,  moduleCompileOptions)
+                  if (!this.to_modules.contains(that)) this.to_modules += that
+                  if(!that.from_modules.contains(this)) that.from_modules += this
+                }
               }
             }
             case None => {
@@ -63,41 +68,28 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
           }
         }
 
-        this.to_modules += that
-        that.from_modules += this
-        this.ctrl >>> that.ctrl
-
         that
     }
 
     private[chisel3] def generateSimpleChiselComponent(): Any = {
-        if(!this.simpleChiselSubModules.isEmpty){
+        if(!this.sub_modules.isEmpty){
           return
         }
         ctrl match{
           case d:TightlyCoupledIOCtrl =>{
             if(d.delay > 0){
               val tightlyCoupledQ = Reg(Vec(d.delay, Bool()))
-              when( (d.stall||d.stuck) ){
-                tightlyCoupledQ(0) := tightlyCoupledQ(0)
-                d.valid_output := false.B
-              }.otherwise{
-                tightlyCoupledQ(0) := d.valid_input
-                d.valid_output := tightlyCoupledQ(d.delay - 1)
+              d.out.valid := tightlyCoupledQ(d.delay - 1)
+              when( ~(d.stall||d.stuck) ){
+                tightlyCoupledQ(0) := d.in.valid
               }
               for(i <- 1 until d.delay){
-                when( (d.stall||d.stuck)){
+                when( ~(d.stall||d.stuck)){
                   tightlyCoupledQ(i) := tightlyCoupledQ(i-1)
-                }.otherwise{
-                  tightlyCoupledQ(i) := tightlyCoupledQ(i)
                 }
               }
             }else{
-              when((d.stall||d.stuck)){
-                d.valid_output := false.B
-              }.otherwise{
-                d.valid_output := d.valid_input
-              }
+              d.out.valid := d.in.valid
             }
           }
           case d:DecoupledIOCtrl =>{
@@ -241,16 +233,21 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
     */
   def >>> (that: Aggregate): Aggregate = {
       implicit val sourceInfo = UnlocatableSourceInfo
-      // val input_ports = that.getElements
-      // val output_ports = this.out.getElements
-      // if(input_ports.size != output_ports.size){
-      //   throwException("The input does not match with outputs")
-      // }
-      // for((input_port, idx) <- input_ports.zipWithIndex){
-      //   input_port.connect(output_ports(idx))(sourceInfo, moduleCompileOptions)
-      // }
       this.out >>> that
-      that.from_module = Some(this)
+      if(that._parent.isDefined){
+        that._parent.get match{
+          case sm: SimpleChiselModuleInternal =>{
+            if (!sm.from_modules.contains(this)) sm.from_modules += this
+            if(!this.to_modules.contains(sm)) this.to_modules += sm
+            if(sm.sub_modules.contains(this)){
+              if (!that.from_modules.contains(this) ) that.from_modules += this
+              for(elt <- that.getElements)
+                if (!elt.from_modules.contains(this)) elt.from_modules += this
+            }
+          }
+          case _ =>()
+        }
+      }
       that
   }
 }

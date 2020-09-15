@@ -3,7 +3,7 @@
 package chisel3.internal
 
 import scala.util.DynamicVariable
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, Set}
 import chisel3._
 import chisel3.experimental._
 import chisel3.internal.firrtl._
@@ -12,7 +12,7 @@ import _root_.firrtl.annotations.{CircuitName, ComponentName, IsMember, ModuleNa
 import chisel3.internal.sourceinfo.UnlocatableSourceInfo
 import chisel3.CompileOptions
 import chisel3.internal.Builder.Prefix
-
+import chisel3.simplechisel._
 import scala.collection.mutable
 
 private[chisel3] class Namespace(keywords: Set[String]) {
@@ -85,8 +85,10 @@ private[chisel3] trait HasId extends InstanceId {
   private[chisel3] val _parent: Option[BaseModule] = Builder.currentModule
   _parent.foreach(_.addId(this))
 
-  private[chisel3] val _id: Long = Builder.idGen.next
-
+  val to_modules: Set[SimpleChiselModuleInternal] = Set()
+  val from_modules: Set[SimpleChiselModuleInternal] = Set()
+  
+  val _id: Long = Builder.idGen.next
   // TODO: remove this, but its removal seems to cause a nasty Scala compiler crash.
   override def hashCode: Int = super.hashCode()
   override def equals(that: Any): Boolean = super.equals(that)
@@ -189,11 +191,9 @@ private[chisel3] trait HasId extends InstanceId {
     if(hasSeed) {
       Some(buildName(seedOpt.get, prefix_seed))
     } else {
-      defaultSeed.map { default =>
-        defaultPrefix match {
-          case Some(p) => buildName(default, Left(p) +: construction_prefix)
-          case None => buildName(default, construction_prefix)
-        }
+      defaultPrefix match {
+        case Some(p) => Some(buildName(defaultSeed.getOrElse("_simplechisel"), Left(p) +: construction_prefix))
+        case None => Some(buildName(defaultSeed.getOrElse("_simplechisel"), construction_prefix))
       }
     }
   }
