@@ -24,7 +24,7 @@ import scala.collection.mutable
   *
   * @note This API is experimental and subject to change
   */
-final class Analog private (private[chisel3] val width: Width) extends Element {
+final class Analog private (val width: Width) extends Element {
   require(width.known, "Since Analog is only for use in BlackBoxes, width must be known")
 
   override def toString: String = {

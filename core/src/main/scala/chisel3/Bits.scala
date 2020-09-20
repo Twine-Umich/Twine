@@ -48,7 +48,7 @@ private[chisel3] sealed trait ToBoolable extends Element {
   * @define sumWidth       @note The width of the returned $coll is `width of this` + `width of that`.
   * @define unchangedWidth @note The width of the returned $coll is unchanged, i.e., the `width of this`.
   */
-sealed abstract class Bits(private[chisel3] val width: Width) extends Element with ToBoolable {
+sealed abstract class Bits( val width: Width) extends Element with ToBoolable {
   // TODO: perhaps make this concrete?
   // Arguments for: self-checking code (can't do arithmetic on bits)
   // Arguments against: generates down to a FIRRTL UInt anyways
@@ -979,7 +979,7 @@ object Reset {
   * @note This shares a common interface with [[AsyncReset]] and [[Bool]] but is not their actual
   * super type due to Bool inheriting from abstract class UInt
   */
-final class ResetType(private[chisel3] val width: Width = Width(1)) extends Element with Reset {
+final class ResetType(val width: Width = Width(1)) extends Element with Reset {
   override def toString: String = s"Reset$bindingToString"
 
   def cloneType: this.type = Reset().asInstanceOf[this.type]
@@ -1026,7 +1026,7 @@ object AsyncReset {
   * operation. [[Reg]]s defined with the implicit reset being an [[AsyncReset]] will be
   * asychronously reset registers.
   */
-sealed class AsyncReset(private[chisel3] val width: Width = Width(1)) extends Element with Reset {
+sealed class AsyncReset(val width: Width = Width(1)) extends Element with Reset {
   override def toString: String = s"AsyncReset$bindingToString"
 
   def cloneType: this.type = AsyncReset().asInstanceOf[this.type]

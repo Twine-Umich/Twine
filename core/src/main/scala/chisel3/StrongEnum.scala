@@ -125,7 +125,7 @@ abstract class EnumType(private val factory: EnumFactory, selfAnnotating: Boolea
   override def do_asUInt(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): UInt =
     pushOp(DefPrim(sourceInfo, UInt(width), AsUIntOp, ref))
 
-  protected[chisel3] override def width: Width = factory.width
+  override def width: Width = factory.width
 
   def isValid(implicit sourceInfo: SourceInfo, compileOptions: CompileOptions): Bool = {
     if (litOption.isDefined) {

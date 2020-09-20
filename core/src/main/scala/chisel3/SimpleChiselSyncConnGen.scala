@@ -12,7 +12,7 @@ import chisel3._
 
 object SimpleChiselSyncConnGen{
 
-    def syncLSTranformation(parent: SimpleChiselModuleInternal, 
+    def syncLSTranformation(parent: SimpleChiselModuleBase, 
         l_ctrl: SimpleChiselIOCtrlInternal, r_ctrl: LockStepIOCtrlInternal): Any ={
         var stall_connected = false
         breakable{
@@ -43,7 +43,7 @@ object SimpleChiselSyncConnGen{
         }
     }
 
-    def syncLITranformation(parent: SimpleChiselModuleInternal, 
+    def syncLITranformation(parent: SimpleChiselModuleBase, 
         l_ctrl: SimpleChiselIOCtrlInternal, r_ctrl: LatInsensitiveIOCtrlInternal): Any ={
         var output_ready_connected = false
         breakable{
@@ -71,7 +71,8 @@ object SimpleChiselSyncConnGen{
         }
     }
 
-    def apply(m: SimpleChiselModuleInternal, l_m: SimpleChiselModuleInternal, r_m: SimpleChiselModuleInternal): Any ={
+    def apply(m: SimpleChiselModuleBase, 
+        l_m: SimpleChiselModuleInternal, r_m: SimpleChiselModuleInternal): Any ={
         (l_m.ctrl, r_m.ctrl) match{
             case (l: SimpleChiselIOCtrlInternal, r: LockStepIOCtrlInternal) =>
                 syncLSTranformation(m, l, r)

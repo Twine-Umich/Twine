@@ -300,7 +300,18 @@ object SimpleChiselCLConnGen{
     }
 
     def apply(m: SimpleChiselModuleInternal): Any ={
+        val to_modules: Set[SimpleChiselModuleInternal] = Set()
         for(sub_m <- m.in.to_modules){
+            to_modules += sub_m
+        }
+        for(elt <- m.in.getElements)
+        {
+            for(sub_m <- elt.to_modules){
+                if(!to_modules.contains(sub_m))
+                    to_modules += sub_m
+            }
+        }
+        for(sub_m <- to_modules){
             crossLayerInputValidTranformation(m, 
                 m.ctrl.asInstanceOf[SimpleChiselIOCtrlInternal], 
                 sub_m.ctrl.asInstanceOf[SimpleChiselIOCtrlInternal])

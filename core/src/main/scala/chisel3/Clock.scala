@@ -13,7 +13,7 @@ object Clock {
 }
 
 // TODO: Document this.
-sealed class Clock(private[chisel3] val width: Width = Width(1)) extends Element {
+sealed class Clock(val width: Width = Width(1)) extends Element {
   override def toString: String = s"Clock$bindingToString"
 
   def cloneType: this.type = Clock().asInstanceOf[this.type]

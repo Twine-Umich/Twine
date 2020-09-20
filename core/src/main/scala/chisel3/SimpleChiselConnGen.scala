@@ -13,10 +13,10 @@ import chisel3._
 object SimpleChiselConnGen{
 
     // Generate SimpleChiselConnection with Module m
-    def generate(m: SimpleChiselModuleInternal)(implicit sourceInfo: SourceInfo,
+    def generate(m: SimpleChiselModuleBase)(implicit sourceInfo: SourceInfo,
                                          compileOptions: CompileOptions): Any = {
         
-        SimpleChiselCLConnGen(m)
+        if(m.isInstanceOf[SimpleChiselModuleInternal]) SimpleChiselCLConnGen(m.asInstanceOf[SimpleChiselModuleInternal])
 
         /**
         By traversing the connectionMap, we would separate all connections into Lock-step Region,
@@ -25,6 +25,7 @@ object SimpleChiselConnGen{
         */
         for(sub_mod <- m.sub_modules){
             val sync_mods: Set[SimpleChiselModuleInternal] = Set()
+            Console.println(s"$sub_mod")
            for(to_mod <- sub_mod.to_modules){
                SimpleChiselSLConnGen(m, sub_mod, to_mod)
                 for(sync_m <- to_mod.from_modules){

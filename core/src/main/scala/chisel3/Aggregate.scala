@@ -118,7 +118,7 @@ sealed abstract class Aggregate extends Data {
     that
   }
 
-  private[chisel3] def width: Width = getElements.map(_.width).foldLeft(0.W)(_ + _)
+  def width: Width = getElements.map(_.width).foldLeft(0.W)(_ + _)
   private[chisel3] def legacyConnect(that: Data)(implicit sourceInfo: SourceInfo): Unit = {
     // If the source is a DontCare, generate a DefInvalid for the sink,
     //  otherwise, issue a Connect.
@@ -817,7 +817,7 @@ abstract class Bundle(implicit compileOptions: CompileOptions) extends Record {
           }
       }
     }
-    ListMap(nameMap.toSeq sortWith { case ((an, a), (bn, b)) => (a._id > b._id) || ((a eq b) && (an > bn)) }: _*)
+    ListMap(nameMap.toSeq sortWith { case ((an, a), (bn, b)) => (a._id < b._id) || ((a eq b) && (an < bn)) }: _*)
   }
 
   /**

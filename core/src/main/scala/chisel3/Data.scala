@@ -500,7 +500,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     }
   }
 
-  private[chisel3] def width: Width
+  def width: Width
   private[chisel3] def legacyConnect(that: Data)(implicit sourceInfo: SourceInfo): Unit
 
   /** Internal API; Chisel users should look at chisel3.chiselTypeOf(...).
@@ -789,7 +789,7 @@ package internal {
     //  otherwise this "Chisel" object will end up on the UserModule's id list.
     // We make it private to chisel3 so it has to be accessed through the package object.
 
-    private[chisel3] override val width: Width = UnknownWidth()
+    override val width: Width = UnknownWidth()
 
     bind(DontCareBinding(), SpecifiedDirection.Output)
     override def cloneType: this.type = DontCare

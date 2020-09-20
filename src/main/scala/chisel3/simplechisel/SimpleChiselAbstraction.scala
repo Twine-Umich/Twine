@@ -11,6 +11,7 @@ import chisel3.internal.sourceinfo._
 import chisel3.util._
 import chisel3.simplechisel.internal._
 import chisel3.internal.MonoConnect.MissingFieldException
+import scala.collection.mutable.ArrayBuffer
 
 /** Abstract base class for SimpleChiselModule, which behave much like Verilog modules.
   * These may contain both logic and state which are written in the Module
@@ -75,7 +76,7 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
         if(!this.sub_modules.isEmpty){
           return
         }
-        ctrl match{
+        this.ctrl match{
           case d:TightlyCoupledIOCtrl =>{
             if(d.delay > 0){
               val tightlyCoupledQ = Reg(Vec(d.delay, Bool()))
@@ -95,7 +96,7 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
           case d:DecoupledIOCtrl =>{
             // Only generate the queue if the receiving or sending buffer is not of size 0
             if(d.size_of_receiving_buffer != 0){
-              val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, true))
+              val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, false, false))
               for((str,d) <- this.in.elements){
                 SimpleChiselTransformer.replaceAll(d.ref, input_buffer.io.deq.bits.elements(str), this._commands)
               }
@@ -107,10 +108,10 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             }
 
             if(d.size_of_sending_buffer != 0){
-              val output_buffer = Module(new Queue(chiselTypeOf(this.out), d.size_of_sending_buffer, true, true))
+              val output_buffer = Module(new Queue(chiselTypeOf(this.out), d.size_of_sending_buffer, false, false))
 
               for((str,d) <- this.out.elements){
-                SimpleChiselTransformer.replaceUses(d.ref, output_buffer.io.enq.bits.elements(str), this._commands)
+                SimpleChiselTransformer.replaceAll(d.ref, output_buffer.io.enq.bits.elements(str), this._commands)
               }
               SimpleChiselTransformer.replaceAll(d.out.valid.ref, output_buffer.io.enq.valid, this._commands)
               SimpleChiselTransformer.replaceAll(d.out.ready.ref, output_buffer.io.enq.ready, this._commands)
@@ -211,6 +212,14 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
           }
           case _ => ()
         }
+        val new_commands = new ArrayBuffer[Command]()
+        for(cmd <- this._commands){
+          cmd match{
+            case defInst: DefInstance => new_commands.prepend(defInst)
+            case _ => new_commands += cmd
+          }
+        }
+        this._commands = new_commands
     }
   
     private[chisel3] override def generateComponent(): Component = {

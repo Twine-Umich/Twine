@@ -66,13 +66,21 @@ final class SimpleChiselBundle[T <: Data](private val eltsIn: Seq[T]) extends co
       if(elt._parent.isDefined){
         elt._parent.get match{
           case sm:SimpleChiselModuleInternal =>{
-            if(!that.from_modules.contains(sm)) that.from_modules += sm
-            if(!sm.to_modules.contains(that)) sm.to_modules += that
+            if(!that.from_modules.contains(sm)&& (!sm.sub_modules.contains(that))) that.from_modules += sm
+            if(!sm.to_modules.contains(that) && (!sm.sub_modules.contains(that))) 
+              sm.to_modules += that
+
+            if(sm.sub_modules.contains(that)){
+              if (!elt.to_modules.contains(that) ) 
+                elt.to_modules += that
+            }
           }
           case _ =>()
         }
       }
     }
+
+  
     that
   }
 }

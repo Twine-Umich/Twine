@@ -83,7 +83,7 @@ case class Node(id: HasId, in_uniqueId: Option[BigInt] = None) extends Arg(in_un
 
 abstract class LitArg(val num: BigInt, widthArg: Width) extends Arg {
   private[chisel3] def forcedWidth = widthArg.known
-  private[chisel3] def width: Width = if (forcedWidth) widthArg else Width(minWidth)
+  def width: Width = if (forcedWidth) widthArg else Width(minWidth)
   override def fullName(ctx: Component): String = name
   // Ensure the node representing this LitArg has a ref to it and a literal binding.
   def bindLitArg[T <: Element](elem: T): T = {

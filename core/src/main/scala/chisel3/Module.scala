@@ -57,7 +57,7 @@ object Module extends SourceInfoDoc {
 
     if(parent.isDefined){
       parent.get match{
-        case sm: SimpleChiselModuleInternal =>{
+        case sm: SimpleChiselModuleBase =>{
           module match{
             case sub_sm: SimpleChiselModuleInternal =>{
               sm.sub_modules += sub_sm
@@ -79,10 +79,11 @@ object Module extends SourceInfoDoc {
     }
 
     module match {
-      case m:SimpleChiselModuleInternal =>{
+      case m:SimpleChiselModuleBase =>{
         // Generate queue and buffers
          SimpleChiselConnGen.generate(m)
-         m.generateSimpleChiselComponent
+         if(m.isInstanceOf[SimpleChiselModuleInternal]) 
+          m.asInstanceOf[SimpleChiselModuleInternal].generateSimpleChiselComponent
         }
       case _ =>()
     }
