@@ -148,7 +148,6 @@ object SimpleChiselSLConnGen{
 
     def sameLayerLIToLITranformation(parent: SimpleChiselModuleBase, 
         l_ctrl: LatInsensitiveIOCtrlInternal, r_ctrl: LatInsensitiveIOCtrlInternal): Any ={
-            Console.println("li to li")
         var input_ready_connected = false
         breakable{
             for((cmd, idx) <- parent._commands.zipWithIndex){
@@ -177,7 +176,6 @@ object SimpleChiselSLConnGen{
 
     def apply(m: SimpleChiselModuleBase, l_m: SimpleChiselModuleInternal, r_m: SimpleChiselModuleInternal): Any ={
         sameLayerDirectValidTranformation(m,  l_m.ctrl.asInstanceOf[SimpleChiselIOCtrlInternal], r_m.ctrl.asInstanceOf[SimpleChiselIOCtrlInternal])
-        Console.println(s"$l_m $r_m")
         (l_m.ctrl, r_m.ctrl) match{
             case (l: LockStepIOCtrlInternal, r: LockStepIOCtrlInternal) =>
                 sameLayerLSToLSTranformation(m, l, r)

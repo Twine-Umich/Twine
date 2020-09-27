@@ -73,11 +73,10 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
     }
 
     private[chisel3] def generateSimpleChiselComponent(): Any = {
-        if(!this.sub_modules.isEmpty){
-          return
-        }
         this.ctrl match{
           case d:TightlyCoupledIOCtrl =>{
+            this.debug_input_enable = Some((d.in.valid & (!d.stall) &(!d.stuck) ))
+            this.debug_output_enable = Some((d.out.valid & (!d.stall) &(!d.stuck)))
             if(d.delay > 0){
               val tightlyCoupledQ = Reg(Vec(d.delay, Bool()))
               d.out.valid := tightlyCoupledQ(d.delay - 1)
@@ -93,7 +92,13 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
               d.out.valid := d.in.valid
             }
           }
+          case d: ValidIOCtrl =>{
+            this.debug_input_enable = Some((d.in.valid & (!d.stall) &(!d.stuck)))
+            this.debug_output_enable = Some((d.out.valid & (!d.stall) &(!d.stuck)))
+          }
           case d:DecoupledIOCtrl =>{
+            this.debug_input_enable = Some((d.in.valid & d.in.ready))
+            this.debug_output_enable = Some((d.out.valid & d.out.ready))
             // Only generate the queue if the receiving or sending buffer is not of size 0
             if(d.size_of_receiving_buffer != 0){
               val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, false, false))
@@ -121,6 +126,8 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             }
           }
           case d:OutOfOrderIOCtrl =>{
+            this.debug_input_enable = Some((d.in.valid & d.in.ready))
+            this.debug_output_enable = Some((d.out.valid & d.out.ready))
             // Only generate the queue if the re-order buffer size is not of size 0
             if(d.size_of_reorder_buffer != 0){
               var input_uses_inorder = false
@@ -232,7 +239,32 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
         require(portsContains(ctrl), "Module must have ctrl wrapped in IO(...)")
         // require(portsSize == 5, "Module must only have in, out, ctrl, clock, and reset as IO")
         
-        super.generateComponent()
+        val generatedComponent = super.generateComponent()
+        generatedComponent match{
+          case DefModule(_, m_name, m_ports, m_commands) =>{
+            val new_commands = m_commands.to[ArrayBuffer]
+            if(Builder.enableDebugging){
+              if(!this.debug_input_enable.isEmpty)
+                new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_input_enable.get.getRef)
+              new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Module:${this.name} inputs\n")
+              for(elt <- this.in.getElements){
+                new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${elt.getRef.name} $elt\n")
+              }
+              if(!this.debug_input_enable.isEmpty)
+                new_commands += WhenEnd(UnlocatableSourceInfo, 0)
+              if(!this.debug_output_enable.isEmpty)
+                new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_output_enable.get.getRef)
+              new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Module:${this.name} outputs\n")
+              for(elt <- this.out.getElements){
+                new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${elt.getRef.name} $elt\n")
+              }
+              if(!this.debug_output_enable.isEmpty)
+                new_commands += WhenEnd(UnlocatableSourceInfo, 0)
+            }
+            DefModule(this,m_name, m_ports, new_commands.toSeq)
+          }
+          case _ => generatedComponent
+       }
     }
 
   /** Connect this to that $coll mono-directionally hand side and element-wise.

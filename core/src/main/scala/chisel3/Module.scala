@@ -82,8 +82,10 @@ object Module extends SourceInfoDoc {
       case m:SimpleChiselModuleBase =>{
         // Generate queue and buffers
          SimpleChiselConnGen.generate(m)
-         if(m.isInstanceOf[SimpleChiselModuleInternal]) 
-          m.asInstanceOf[SimpleChiselModuleInternal].generateSimpleChiselComponent
+          m match{
+            case sm: SimpleChiselModuleInternal => sm.generateSimpleChiselComponent
+            case _ =>()
+          }
         }
       case _ =>()
     }

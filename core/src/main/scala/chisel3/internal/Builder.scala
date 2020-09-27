@@ -366,7 +366,7 @@ private[chisel3] object Builder {
       new ChiselContext
     }
   }
-
+  val enableDebugging = true
   // Initialize any singleton objects before user code inadvertently inherits them.
   private def initializeSingletons(): Unit = {
     // This used to contain:

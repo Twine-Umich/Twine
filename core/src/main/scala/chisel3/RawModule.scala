@@ -120,7 +120,7 @@ abstract class RawModule(implicit moduleCompileOptions: CompileOptions)
       Port(port, direction)
     }
     _firrtlPorts = Some(firrtlPorts)
-
+    
     // Generate IO invalidation commands to initialize outputs as unused,
     //  unless the client wants explicit control over their generation.
     val invalidateCommands = {

@@ -17,7 +17,8 @@ abstract class SimpleChiselModuleBase(implicit moduleCompileOptions: CompileOpti
   // These are to be phased out
   protected var override_clock: Option[Clock] = None
   protected var override_reset: Option[Bool] = None
-
+  var debug_input_enable: Option[Bool] = None
+  var debug_output_enable: Option[Bool] = None
   // Allow access to bindings from the compatibility package
   // protected def _compatIoPortBound() = portsContains(io)// scalastyle:ignore method.name
 
