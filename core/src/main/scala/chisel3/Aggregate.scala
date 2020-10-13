@@ -99,7 +99,14 @@ sealed abstract class Aggregate extends Data {
     that
   }
 
-
+  def expandAndAddElements(aggregate: Aggregate, buffer:ArrayBuffer[Data]): Any ={
+    for(elt <- aggregate.getElements){
+      elt match{
+        case a: Aggregate => expandAndAddElements(a, buffer)
+        case _ => buffer += elt
+      }
+    }
+  }
     /** Connect this to that $coll mono-directionally hand side and element-wise.
       *
       * @param that the $coll to connect to
@@ -107,8 +114,10 @@ sealed abstract class Aggregate extends Data {
       */
   def >>> (that: Aggregate)(implicit sourceInfo: SourceInfo, connectionCompileOptions:CompileOptions): Aggregate = {
     implicit val sourceInfo = UnlocatableSourceInfo
-    val input_ports = that.getElements
-    val output_ports = this.getElements
+    val input_ports = new ArrayBuffer[Data]
+    val output_ports = new ArrayBuffer[Data]
+    expandAndAddElements(that, input_ports)
+    expandAndAddElements(this, output_ports)
     if(input_ports.size != output_ports.size){
       throwException(s"The input port size ${input_ports.size} does not match with outputs ${output_ports.size}")
     }

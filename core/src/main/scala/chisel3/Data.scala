@@ -480,11 +480,11 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
   // Internal API: returns a ref, if bound. Literals should override this as needed.
   def ref: Arg = {
     requireIsHardware(this)
-    if (Builder.currentModule.isDefined) {
-      // This is allowed (among other cases) for evaluating args of Printf / Assert / Printable, which are
-      // partially resolved *after* elaboration completes. If this is resolved, the check should be unconditional.
-      requireVisible()
-    }
+    // if (Builder.currentModule.isDefined) {
+    //   // This is allowed (among other cases) for evaluating args of Printf / Assert / Printable, which are
+    //   // partially resolved *after* elaboration completes. If this is resolved, the check should be unconditional.
+    //   requireVisible()
+    // }
     topBindingOpt match {
       case Some(binding: LitBinding) => throwException(s"internal error: can't handle literal binding $binding")
       case Some(binding: TopBinding) =>{

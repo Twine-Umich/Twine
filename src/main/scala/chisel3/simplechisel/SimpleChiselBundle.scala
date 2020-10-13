@@ -60,6 +60,16 @@ final class SimpleChiselBundle[T <: Data](private val eltsIn: Seq[T]) extends co
     that
   }
 
+  def >>> [T <: Data](that: SimpleChiselBundle[T]): SimpleChiselBundle[T] = {
+    val input_ports = that.getElements
+    val output_ports = this.getElements
+
+    for((input_port, idx) <- input_ports.zipWithIndex){
+      input_port := output_ports(idx)
+    }
+    that
+  }
+
   def >>>[T <: SimpleChiselModule](that: T): T = {
     this >>> that.in
     for(elt <-this.getElements){

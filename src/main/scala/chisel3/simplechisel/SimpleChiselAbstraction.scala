@@ -13,6 +13,14 @@ import chisel3.simplechisel.internal._
 import chisel3.internal.MonoConnect.MissingFieldException
 import scala.collection.mutable.ArrayBuffer
 
+// object MoniteState{
+//   def apply[T <: Data](val enable: Bool, val data:T):Any = {
+
+//   }
+//   def apply[T <: Data](val enable: Bool, val mem:Mem[T]):Any = {
+
+//   }
+// }
 /** Abstract base class for SimpleChiselModule, which behave much like Verilog modules.
   * These may contain both logic and state which are written in the Module
   * body (constructor).
@@ -73,6 +81,9 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
     }
 
     private[chisel3] def generateSimpleChiselComponent(): Any = {
+        val counterVal = Reg(UInt(64.W))
+        counterVal := counterVal + 1.U
+        this.clock_counter_val = Some(counterVal)
         this.ctrl match{
           case d:TightlyCoupledIOCtrl =>{
             this.debug_input_enable = Some((d.in.valid & (!d.stall) &(!d.stuck) ))
@@ -97,15 +108,21 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             this.debug_output_enable = Some((d.out.valid & (!d.stall) &(!d.stuck)))
           }
           case d:DecoupledIOCtrl =>{
-            this.debug_input_enable = Some((d.in.valid & d.in.ready))
-            this.debug_output_enable = Some((d.out.valid & d.out.ready))
             // Only generate the queue if the receiving or sending buffer is not of size 0
             if(d.size_of_receiving_buffer != 0){
-              val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, false, false))
-              for((str,d) <- this.in.elements){
-                SimpleChiselTransformer.replaceAll(d.ref, input_buffer.io.deq.bits.elements(str), this._commands)
+              val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, false))
+              for((str,dat) <- this.in.elements){
+                SimpleChiselTransformer.replaceAll(dat.ref, input_buffer.io.enq.bits.elements(str), this._commands)
+                (dat, input_buffer.io.enq.bits.elements(str)) match{
+                  case (v_l: Vec[_], v_r: Vec[_]) =>{
+                    for(i <- 0 until v_l.length){
+                      SimpleChiselTransformer.replaceAll(v_l(i).ref, v_r(i), this._commands)
+                    }
+                  }
+                  case _ => ()
+                }
               }
-              SimpleChiselTransformer.replaceAll(d.in.valid.ref, input_buffer.io.deq.valid, this._commands)
+              SimpleChiselTransformer.replaceUses(d.in.valid.ref, input_buffer.io.deq.valid, this._commands)
               SimpleChiselTransformer.replaceAll(d.in.ready.ref, input_buffer.io.deq.ready, this._commands)
               input_buffer.io.enq.valid := d.in.valid
               d.in.ready := input_buffer.io.enq.ready
@@ -113,21 +130,28 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             }
 
             if(d.size_of_sending_buffer != 0){
-              val output_buffer = Module(new Queue(chiselTypeOf(this.out), d.size_of_sending_buffer, false, false))
-
-              for((str,d) <- this.out.elements){
-                SimpleChiselTransformer.replaceAll(d.ref, output_buffer.io.enq.bits.elements(str), this._commands)
+              val output_buffer = Module(new Queue(chiselTypeOf(this.out), d.size_of_sending_buffer, true, false))
+              for((str,dat) <- this.out.elements){
+                SimpleChiselTransformer.replaceAll(dat.ref, output_buffer.io.enq.bits.elements(str), this._commands)
+                (dat, output_buffer.io.enq.bits.elements(str)) match{
+                  case (v_l: Vec[_], v_r: Vec[_]) =>{
+                    for(i <- 0 until v_l.length){
+                      SimpleChiselTransformer.replaceAll(v_l(i).ref, v_r(i), this._commands)
+                    }
+                  }
+                  case _ => ()
+                }
               }
               SimpleChiselTransformer.replaceAll(d.out.valid.ref, output_buffer.io.enq.valid, this._commands)
-              SimpleChiselTransformer.replaceAll(d.out.ready.ref, output_buffer.io.enq.ready, this._commands)
+              SimpleChiselTransformer.replaceUses(d.out.ready.ref, output_buffer.io.enq.ready, this._commands)
               output_buffer.io.deq.ready := d.out.ready
               d.out.valid :=  output_buffer.io.deq.valid
               this.out <> output_buffer.io.deq.bits
             }
-          }
-          case d:OutOfOrderIOCtrl =>{
             this.debug_input_enable = Some((d.in.valid & d.in.ready))
             this.debug_output_enable = Some((d.out.valid & d.out.ready))
+          }
+          case d:OutOfOrderIOCtrl =>{
             // Only generate the queue if the re-order buffer size is not of size 0
             if(d.size_of_reorder_buffer != 0){
               var input_uses_inorder = false
@@ -216,6 +240,8 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
                 this.out <> output_buffer.out.bits
               }
             }
+            this.debug_input_enable = Some((d.in.valid & d.in.ready))
+            this.debug_output_enable = Some((d.out.valid & d.out.ready))
           }
           case _ => ()
         }
@@ -246,18 +272,23 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             if(Builder.enableDebugging){
               if(!this.debug_input_enable.isEmpty)
                 new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_input_enable.get.getRef)
-              new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Module:${this.name} inputs\n")
+              new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Cycle: ${this.clock_counter_val.getOrElse(0.U)} Module:${this.name} inputs\n")
               for(elt <- this.in.getElements){
-                new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${elt.getRef.name} $elt\n")
+                elt match{
+                  case b:Bits => new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${b.getRef.name}=0x${Hexadecimal(b)}\n")
+                  case _ => new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${elt.getRef.name}=${elt}\n")
+                }
               }
               if(!this.debug_input_enable.isEmpty)
                 new_commands += WhenEnd(UnlocatableSourceInfo, 0)
               if(!this.debug_output_enable.isEmpty)
                 new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_output_enable.get.getRef)
-              new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Module:${this.name} outputs\n")
+              new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Cycle: ${this.clock_counter_val.getOrElse(0.U)} Module:${this.name} outputs\n")
               for(elt <- this.out.getElements){
-                new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${elt.getRef.name} $elt\n")
-              }
+                elt match{
+                  case b:Bits => new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${b.getRef.name}=0x${Hexadecimal(b)}\n")
+                  case _ => new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${elt.getRef.name}=${elt}\n")
+                }              }
               if(!this.debug_output_enable.isEmpty)
                 new_commands += WhenEnd(UnlocatableSourceInfo, 0)
             }

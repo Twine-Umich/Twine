@@ -178,7 +178,10 @@ object SimpleChiselChecker{
         val driving_conditional_args = new ListBuffer[Int]()
         for(command <- d.commands){
           command match{
-            case w: WhenBegin => {driving_conditional_args += hashMap(w.pred.fullName(d))}
+            case w: WhenBegin => {
+              if(hashMap.contains(w.pred.fullName(d)))
+                  driving_conditional_args += hashMap(w.pred.fullName(d))
+            }
             case w: WhenEnd => {if(!w.hasAlt) driving_conditional_args.clear}
             case o: OtherwiseEnd => driving_conditional_args.clear
             case c: ConnectInit => {

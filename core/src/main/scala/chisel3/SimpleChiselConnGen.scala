@@ -26,7 +26,7 @@ object SimpleChiselConnGen{
         for(sub_mod <- m.sub_modules){
             val sync_mods: Set[SimpleChiselModuleInternal] = Set()
             for(to_mod <- sub_mod.to_modules){
-               SimpleChiselSLConnGen(m, sub_mod, to_mod)
+                if(to_mod != m) SimpleChiselSLConnGen(m, sub_mod, to_mod)
                 for(sync_m <- to_mod.from_modules){
                     if(sync_m != m && sync_m != sub_mod){
                         if(!sync_mods.contains(sync_m )) sync_mods += sync_m
