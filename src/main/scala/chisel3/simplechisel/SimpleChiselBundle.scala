@@ -37,9 +37,19 @@ final class SimpleChiselBundle[T <: Data](private val eltsIn: Seq[T]) extends co
   def getElements: Seq[Data] =
     (0 until length).map(apply(_))
 
+  def expandAndAddElements(aggregate: Aggregate, buffer:ArrayBuffer[Data]): Any ={
+    for(elt <- aggregate.getElements){
+      elt match{
+        case a: Aggregate => expandAndAddElements(a, buffer)
+        case _ => buffer += elt
+      }
+    }
+  }
+
   def >>> (that: Aggregate): Aggregate = {
-    val input_ports = that.getElements
+    val input_ports = new ArrayBuffer[Data]
     val output_ports = this.getElements
+    expandAndAddElements(that, input_ports)
 
     for((input_port, idx) <- input_ports.zipWithIndex){
       input_port := output_ports(idx)

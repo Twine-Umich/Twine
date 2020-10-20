@@ -96,7 +96,6 @@ object Module extends SourceInfoDoc {
     Builder.currentReset = saveReset
 
     var component = module.generateComponent()
-
     // Check certain logic
     SimpleChiselChecker.simpleChiselCtrlCheck(component)
     Builder.components += component
