@@ -446,8 +446,6 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     */
   private[chisel3] def typeEquivalent(that: Data): Boolean
 
-  private[chisel3] var _internal_uniqueId: Option[BigInt] = None
-
   private def requireVisible(): Unit = {
     val mod = topBindingOpt.flatMap(_.location)
     topBindingOpt match {
@@ -468,8 +466,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     topBindingOpt match {
       case Some(binding: ReadOnlyBinding) => throwException(s"internal error: attempted to generate LHS ref to ReadOnlyBinding $binding") // scalastyle:ignore line.size.limit
       case Some(binding: TopBinding) => {
-          val node = Node(this, _internal_uniqueId)
-          _internal_uniqueId = Some(node.uniqueId)
+          val node = Node(this, _id)
           node
       }
       case opt => throwException(s"internal error: unknown binding $opt in generating LHS ref")
@@ -488,13 +485,11 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
     topBindingOpt match {
       case Some(binding: LitBinding) => throwException(s"internal error: can't handle literal binding $binding")
       case Some(binding: TopBinding) =>{
-          val node = Node(this, _internal_uniqueId)
-          _internal_uniqueId = Some(node.uniqueId)
+          val node = Node(this, _id)
           node
         }
       case opt => {
-          val node = Node(this, _internal_uniqueId)
-          _internal_uniqueId = Some(node.uniqueId)
+          val node = Node(this, _id)
           node
         }
     }

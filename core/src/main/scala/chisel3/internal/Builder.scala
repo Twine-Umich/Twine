@@ -219,21 +219,17 @@ private[chisel3] trait HasId extends InstanceId {
     if(_ref.isEmpty) {
       val candidate_name = computeName(prefix, Some(default)).get
       val available_name = namespace.name(candidate_name)
-      setRef(Ref(available_name, _internal_uniqueId))
-      _internal_uniqueId = Some(_ref.get.uniqueId)
+      setRef(Ref(available_name, _id))
     }
 
-  private var _internal_uniqueId: Option[BigInt] = None
   private var _ref: Option[Arg] = None
   private[chisel3] def setRef(imm: Arg): Unit = {
-    if(!_internal_uniqueId.isEmpty){_ref.get.uniqueId = _internal_uniqueId.get}
     _ref = Some(imm)
-    _internal_uniqueId = Some(_ref.get.uniqueId)
     _ref
   }
-  private[chisel3] def setRef(parent: HasId, name: String): Unit = setRef(Slot(Node(parent), name, _internal_uniqueId))
-  private[chisel3] def setRef(parent: HasId, index: Int): Unit = setRef(Index(Node(parent), ILit(index), _internal_uniqueId))
-  private[chisel3] def setRef(parent: HasId, index: UInt): Unit = setRef(Index(Node(parent), index.ref, _internal_uniqueId))
+  private[chisel3] def setRef(parent: HasId, name: String): Unit = setRef(Slot(Node(parent), name, _id))
+  private[chisel3] def setRef(parent: HasId, index: Int): Unit = setRef(Index(Node(parent), ILit(index), _id))
+  private[chisel3] def setRef(parent: HasId, index: UInt): Unit = setRef(Index(Node(parent), index.ref, _id))
   def getRef: Arg = _ref.get
   def getOptionRef: Option[Arg] = _ref
 
@@ -332,7 +328,7 @@ private[chisel3] class DynamicContext() {
   val components = ArrayBuffer[Component]()
   val annotations = ArrayBuffer[ChiselAnnotation]()
   var currentModule: Option[BaseModule] = None
-  var uniqueId: BigInt = 0
+
   /** Contains a mapping from a elaborated module to their aspect
     * Set by [[ModuleAspect]]
     */
@@ -431,14 +427,6 @@ private[chisel3] object Builder {
   }
   def currentModule_=(target: Option[BaseModule]): Unit = {
     dynamicContext.currentModule = target
-  }
-
-  def uniqueId: BigInt = dynamicContextVar.value match {
-    case Some(dyanmicContext) => {
-      dyanmicContext.uniqueId += 1
-      dynamicContext.uniqueId
-    }
-    case _ => BigInt(0)
   }
 
   def aspectModule(module: BaseModule): Option[BaseModule] = dynamicContextVar.value match {

@@ -81,6 +81,7 @@ object SimpleChiselTransformer {
             whenBegin.pred = rId.ref
         }
         case connect: Connect => {
+
           if (connect.exp.uniqueId.equals(lId.uniqueId)) connect.exp = rId.ref
         }
         case connect: ConnectInit => {

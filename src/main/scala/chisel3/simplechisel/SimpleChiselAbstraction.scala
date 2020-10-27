@@ -112,13 +112,14 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             if(d.size_of_receiving_buffer != 0){
               val input_buffer = Module(new Queue(chiselTypeOf(this.in), d.size_of_receiving_buffer, true, false))
               for((str,dat) <- this.in.elements){
-                SimpleChiselTransformer.replaceAll(dat.ref, input_buffer.io.enq.bits.elements(str), this._commands)
-                (dat, input_buffer.io.enq.bits.elements(str)) match{
+                SimpleChiselTransformer.replaceUses(dat.ref, input_buffer.io.deq.bits.elements(str), this._commands)
+                (dat, input_buffer.io.deq.bits.elements(str)) match{
                   case (v_l: Vec[_], v_r: Vec[_]) =>{
                     for(i <- 0 until v_l.length){
-                      SimpleChiselTransformer.replaceAll(v_l(i).ref, v_r(i), this._commands)
+                      SimpleChiselTransformer.replaceUses(v_l(i).ref, v_r(i), this._commands)
                     }
                   }
+
                   case _ => ()
                 }
               }
@@ -271,8 +272,8 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             val new_commands = m_commands.to[ArrayBuffer]
             if(Builder.enableDebugging){
               if(!this.debug_input_enable.isEmpty)
-                new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_input_enable.get.getRef)
-              new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Cycle: ${this.clock_counter_val.getOrElse(0.U)} Module:${this.name} inputs\n")
+                new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_input_enable.get.ref)
+                new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Cycle: ${this.clock_counter_val.getOrElse(0.U)} Module:${this.name} inputs\n")
               for(elt <- this.in.getElements){
                 elt match{
                   case b:Bits => new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"${b.getRef.name}=0x${Hexadecimal(b)}\n")
@@ -282,7 +283,7 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
               if(!this.debug_input_enable.isEmpty)
                 new_commands += WhenEnd(UnlocatableSourceInfo, 0)
               if(!this.debug_output_enable.isEmpty)
-                new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_output_enable.get.getRef)
+                new_commands += WhenBegin(UnlocatableSourceInfo, this.debug_output_enable.get.ref)
               new_commands += Printf(UnlocatableSourceInfo, this.clock.getRef, p"Cycle: ${this.clock_counter_val.getOrElse(0.U)} Module:${this.name} outputs\n")
               for(elt <- this.out.getElements){
                 elt match{

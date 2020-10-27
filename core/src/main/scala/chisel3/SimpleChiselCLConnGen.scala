@@ -18,7 +18,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(child_ctrl.in.valid.ref.uniqueId)){
+                        if(connect.loc.uniqueId == child_ctrl.in.valid._id){
                             val valid_bus = Builder.insertOp(
                                         DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitAndOp, connect.exp, parent_ctrl.in.valid.ref), idx)
@@ -34,7 +34,7 @@ object SimpleChiselCLConnGen{
         if(!input_valid_connected){
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(child_ctrl.in.valid, Some(child_ctrl.in.valid.ref.uniqueId)), 
+                    Node(child_ctrl.in.valid, child_ctrl.in.valid._id), 
                     parent_ctrl.in.valid.ref))
         }
     }
@@ -46,7 +46,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(parent_ctrl.stuck.ref.uniqueId)){
+                        if(connect.loc.uniqueId == parent_ctrl.stuck._id){
                             val readyNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitNotOp, child_ctrl.in.ready.ref), idx)
                             val stuckBus = Builder.insertOp(
@@ -66,7 +66,7 @@ object SimpleChiselCLConnGen{
                     PrimOp.BitNotOp, child_ctrl.in.ready.ref))
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(parent_ctrl.stuck, Some(parent_ctrl.stuck.ref.uniqueId)), 
+                    Node(parent_ctrl.stuck, parent_ctrl.stuck._id), 
                     readyNegate.ref))
         }
     }
@@ -78,7 +78,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(parent_ctrl.in.ready.ref.uniqueId)){
+                        if(connect.loc.uniqueId == parent_ctrl.in.ready._id){
                             val ready_bus = Builder.insertOp(
                                         DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitAndOp, connect.exp, child_ctrl.in.ready.ref), idx)
@@ -94,7 +94,7 @@ object SimpleChiselCLConnGen{
         if(!input_ready_connected){
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(parent_ctrl.in.ready, Some(parent_ctrl.in.ready.ref.uniqueId)), 
+                    Node(parent_ctrl.in.ready, parent_ctrl.in.ready._id), 
                     child_ctrl.in.ready.ref))
         }
     }
@@ -106,7 +106,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(parent_ctrl.in.ready.ref.uniqueId)){
+                        if(connect.loc.uniqueId == parent_ctrl.in.ready._id){
                             val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitNotOp, child_ctrl.stuck.ref), idx)
                             val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
@@ -136,7 +136,7 @@ object SimpleChiselCLConnGen{
                     PrimOp.BitAndOp, stuckNegate.ref, stallNegate.ref))
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(parent_ctrl.in.ready, Some(parent_ctrl.in.ready.ref.uniqueId)), 
+                    Node(parent_ctrl.in.ready, parent_ctrl.in.ready._id), 
                     ready_with_stuck_stall.ref))
         }
     }
@@ -149,7 +149,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(parent_ctrl.out.valid.ref.uniqueId)){
+                        if(connect.loc.uniqueId == parent_ctrl.out.valid._id){
                             val valid_bus = Builder.insertOp(
                                         DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitAndOp, connect.exp, child_ctrl.out.valid.ref), idx)
@@ -165,7 +165,7 @@ object SimpleChiselCLConnGen{
         if(!input_valid_connected){
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(parent_ctrl.out.valid, Some(parent_ctrl.out.valid.ref.uniqueId)), 
+                    Node(parent_ctrl.out.valid, parent_ctrl.out.valid._id), 
                     child_ctrl.out.valid.ref))
         }
     }
@@ -178,7 +178,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(child_ctrl.stall.ref.uniqueId)){
+                        if(connect.loc.uniqueId == child_ctrl.stall._id){
                             val stall_bus = Builder.insertOp(
                                         DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitOrOp, connect.exp, parent_ctrl.stall.ref), idx)
@@ -193,7 +193,7 @@ object SimpleChiselCLConnGen{
         }
         if(!stall_connected){
             Builder.pushCommand(Connect(UnlocatableSourceInfo, 
-                Node(child_ctrl.stall, Some(child_ctrl.stall.ref.uniqueId)), parent_ctrl.stall.ref))
+                Node(child_ctrl.stall, child_ctrl.stall._id), parent_ctrl.stall.ref))
         }
     }
 
@@ -204,7 +204,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(child_ctrl.stall.ref.uniqueId)){
+                        if(connect.loc.uniqueId == child_ctrl.stall._id){
                             val readyNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitNotOp, parent_ctrl.out.ready.ref), idx)
                             val stallBus = Builder.insertOp(
@@ -224,7 +224,7 @@ object SimpleChiselCLConnGen{
                     PrimOp.BitNotOp, parent_ctrl.out.ready.ref))
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(child_ctrl.stall, Some(child_ctrl.stall.ref.uniqueId)), 
+                    Node(child_ctrl.stall, child_ctrl.stall._id), 
                     readyNegate.ref))
         }
     }
@@ -236,7 +236,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(child_ctrl.out.ready.ref.uniqueId)){
+                        if(connect.loc.uniqueId == child_ctrl.out.ready._id){
                             val ready_bus = Builder.insertOp(
                                         DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitAndOp, connect.exp, parent_ctrl.out.ready.ref), idx)
@@ -252,7 +252,7 @@ object SimpleChiselCLConnGen{
         if(!input_ready_connected){
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(child_ctrl.out.ready, Some(child_ctrl.out.ready.ref.uniqueId)), 
+                    Node(child_ctrl.out.ready, child_ctrl.out.ready._id), 
                     parent_ctrl.out.ready.ref))
         }
     }
@@ -264,7 +264,7 @@ object SimpleChiselCLConnGen{
             for((cmd, idx) <- parent._commands.zipWithIndex){
                 cmd match{
                     case connect:Connect =>{
-                        if(connect.loc.uniqueId.equals(child_ctrl.out.ready.ref.uniqueId)){
+                        if(connect.loc.uniqueId == child_ctrl.out.ready._id){
                             val stuckNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitNotOp, parent_ctrl.stuck.ref), idx)
                             val stallNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
@@ -294,7 +294,7 @@ object SimpleChiselCLConnGen{
                     PrimOp.BitAndOp, stuckNegate.ref, stallNegate.ref))
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
-                    Node(child_ctrl.out.ready, Some(child_ctrl.out.ready.ref.uniqueId)), 
+                    Node(child_ctrl.out.ready, child_ctrl.out.ready._id), 
                     ready_with_stuck_stall.ref))
         }
     }

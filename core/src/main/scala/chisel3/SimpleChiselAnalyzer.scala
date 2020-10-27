@@ -12,27 +12,27 @@ object SimpleChiselAnalyzer{
         for(cmd <- ctx){
             cmd match{
                 case c:DefPrim[_] =>{
-                    if(c.id.ref.uniqueId.equals(id.uniqueId)){
+                    if(c.id.ref.uniqueId == id.uniqueId){
                         return Some(c)
                     }
                 }
                 case c:DefWire =>{
-                    if(c.id.ref.uniqueId.equals(id.uniqueId)){
+                    if(c.id.ref.uniqueId == id.uniqueId){
                         return Some(c)
                     }
                 }
                 case c:DefReg =>{
-                    if(c.id.ref.uniqueId.equals(id.uniqueId)){
+                    if(c.id.ref.uniqueId == id.uniqueId){
                         return Some(c)
                     }
                 }
                 case c:DefInstance =>{
-                    if(c.id.getRef.uniqueId.equals(id.uniqueId)){
+                    if(c.id.getRef.uniqueId == id.uniqueId){
                         return Some(c)
                     }
                 }
                 case c:DefRegInit =>{
-                    if(c.id.ref.uniqueId.equals(id.uniqueId)){
+                    if(c.id.ref.uniqueId == id.uniqueId){
                         return Some(c)
                     }
                 }
@@ -49,23 +49,23 @@ object SimpleChiselAnalyzer{
             cmd match{
                 case c: DefPrim[_] => {
                     for(arg <- c.args){
-                        if(arg.uniqueId.equals(id.uniqueId)){
+                        if(arg.uniqueId == id.uniqueId){
                             allUsers += c
                         }
                     }
                 }
                 case c:  Connect => {
-                    if(c.exp.uniqueId.equals(id.uniqueId)){
+                    if(c.exp.uniqueId == id.uniqueId){
                             allUsers += c
                     }
                 }
                 case c: ConnectInit => {
-                    if(c.exp.uniqueId.equals(id.uniqueId)){
+                    if(c.exp.uniqueId == id.uniqueId){
                             allUsers += c
                     }
                 }
                 case c: DefRegInit => {
-                    if(c.init.uniqueId.equals(id.uniqueId)){
+                    if(c.init.uniqueId == id.uniqueId){
                             allUsers += c
                     }
                 }
@@ -74,18 +74,18 @@ object SimpleChiselAnalyzer{
         return allUsers
     }
 
-    def backtracePath(start: BigInt, end: BigInt, parent: HashMap[BigInt, BigInt] ): ListBuffer[BigInt] = {
+    def backtracePath(start: Long, end: Long, parent: HashMap[Long, Long] ): ListBuffer[Long] = {
         val p = parent(end)
         if (p == -1) return ListBuffer(start)
 
         return (backtracePath(start, p, parent) ++ ListBuffer(end))
     }
 
-    def findPath( graph: HashMap[BigInt, ListBuffer[BigInt]], start: BigInt, end: BigInt): 
-                Option[ListBuffer[BigInt]] = {
-        var visited: HashMap[BigInt, Boolean] = HashMap()
-        var parent: HashMap[BigInt, BigInt] = HashMap()
-        val queue = Queue[BigInt]()
+    def findPath( graph: HashMap[Long, ListBuffer[Long]], start: Long, end: Long): 
+                Option[ListBuffer[Long]] = {
+        var visited: HashMap[Long, Boolean] = HashMap()
+        var parent: HashMap[Long, Long] = HashMap()
+        val queue = Queue[Long]()
 
         for ((k,v) <- graph) {
             visited += (k -> false)
@@ -109,11 +109,11 @@ object SimpleChiselAnalyzer{
         return None
     }
 
-    def traverseData(elt: Data, map:HashMap[BigInt, ListBuffer[BigInt]]):Any = elt match {
+    def traverseData(elt: Data, map:HashMap[Long, ListBuffer[Long]]):Any = elt match {
         case data: Vec[_] => {
             for(e <- data.getElements){
                 if(!map.contains(e.ref.uniqueId)){
-                    map += (e.ref.uniqueId ->  new ListBuffer[BigInt]())
+                    map += (e.ref.uniqueId ->  new ListBuffer[Long]())
                 }
             }
         }
@@ -124,13 +124,13 @@ object SimpleChiselAnalyzer{
         }
         case _ =>{
             if(!map.contains(elt.ref.uniqueId)){
-                map += (elt.ref.uniqueId -> new ListBuffer[BigInt]())
+                map += (elt.ref.uniqueId -> new ListBuffer[Long]())
             }
         }
     }
 
-    def findSameCycleDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[BigInt] = {
-        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+    def findSameCycleDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[Long] = {
+        val map:HashMap[Long, ListBuffer[Long]] = new HashMap[Long, ListBuffer[Long]]
         for(command <- ctx){
           command match{
             case wire:DefWire =>{
@@ -165,7 +165,7 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val driving_conditional_args = new ListBuffer[BigInt]()
+        val driving_conditional_args = new ListBuffer[Long]()
         for(command <- ctx){
           command match{
             case w: WhenBegin => {driving_conditional_args += w.pred.uniqueId}
@@ -185,13 +185,13 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val allDependencies = new ArrayBuffer[BigInt]
+        val allDependencies = new ArrayBuffer[Long]
 
         return findAllDependency(id.uniqueId, allDependencies, map).toSeq
     }
   
-    def findAllDependency(id:BigInt, lists:ArrayBuffer[BigInt], 
-                      map: HashMap[BigInt, ListBuffer[BigInt]]):ArrayBuffer[BigInt] = {
+    def findAllDependency(id:Long, lists:ArrayBuffer[Long], 
+                      map: HashMap[Long, ListBuffer[Long]]):ArrayBuffer[Long] = {
       if(map.contains(id)){
         for(dependencyId <- map(id)){
           if(!lists.contains(dependencyId)){
@@ -203,8 +203,8 @@ object SimpleChiselAnalyzer{
       return lists
     }
 
-    def findDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[BigInt]  = {
-        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+    def findDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[Long]  = {
+        val map:HashMap[Long, ListBuffer[Long]] = new HashMap[Long, ListBuffer[Long]]
         for(command <- ctx){
           command match{
             case wire:DefWire =>{
@@ -248,7 +248,7 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val driving_conditional_args = new ListBuffer[BigInt]()
+        val driving_conditional_args = new ListBuffer[Long]()
         for(command <- ctx){
           command match{
             case w: WhenBegin => {driving_conditional_args += w.pred.uniqueId}
@@ -268,14 +268,14 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val allDependencies = new ArrayBuffer[BigInt]
+        val allDependencies = new ArrayBuffer[Long]
 
         return findAllDependency(id.uniqueId, allDependencies, map).toSeq
     }   
 
     // Whether lId is dependent on rId
     def hasSameCycleDependency(lId: Arg, rId: Arg, ctx: ArrayBuffer[Command]): Boolean  = {
-        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+        val map:HashMap[Long, ListBuffer[Long]] = new HashMap[Long, ListBuffer[Long]]
 
         for(command <- ctx){
           command match{
@@ -308,7 +308,7 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val driving_conditional_args = new ListBuffer[BigInt]()
+        val driving_conditional_args = new ListBuffer[Long]()
         for(command <- ctx){
           command match{
             case w: WhenBegin => {
@@ -355,7 +355,7 @@ object SimpleChiselAnalyzer{
 
     // Whether lId is dependent on rId
     def hasDependency(lId: Arg, rId: Arg, ctx: ArrayBuffer[Command]): Boolean = {
-        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+        val map:HashMap[Long, ListBuffer[Long]] = new HashMap[Long, ListBuffer[Long]]
 
         for(command <- ctx){
           command match{
@@ -397,7 +397,7 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val driving_conditional_args = new ListBuffer[BigInt]()
+        val driving_conditional_args = new ListBuffer[Long]()
         for(command <- ctx){
           command match{
             case w: WhenBegin => {
@@ -442,8 +442,8 @@ object SimpleChiselAnalyzer{
         }
     }
 
-    def findIndirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[BigInt] = {
-        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+    def findIndirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[Long] = {
+        val map:HashMap[Long, ListBuffer[Long]] = new HashMap[Long, ListBuffer[Long]]
         for(command <- ctx){
           command match{
             case wire:DefWire =>{
@@ -462,7 +462,7 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val driving_conditional_args = new ListBuffer[BigInt]()
+        val driving_conditional_args = new ListBuffer[Long]()
         for(command <- ctx){
           command match{
             case w: WhenBegin => {driving_conditional_args += w.pred.uniqueId}
@@ -482,13 +482,13 @@ object SimpleChiselAnalyzer{
             case _ =>()
           }
         }
-        val allDependencies = new ArrayBuffer[BigInt]
+        val allDependencies = new ArrayBuffer[Long]
 
         return findAllDependency(id.uniqueId, allDependencies, map).toSeq
     }
 
-    def findDirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[BigInt] = {
-        val map:HashMap[BigInt, ListBuffer[BigInt]] = new HashMap[BigInt, ListBuffer[BigInt]]
+    def findDirectDependencies(id: Arg, ctx: ArrayBuffer[Command]): Seq[Long] = {
+        val map:HashMap[Long, ListBuffer[Long]] = new HashMap[Long, ListBuffer[Long]]
         for(command <- ctx){
           command match{
             case wire:DefWire =>{
@@ -533,7 +533,7 @@ object SimpleChiselAnalyzer{
           }
         }
 
-        val allDependencies = new ArrayBuffer[BigInt]
+        val allDependencies = new ArrayBuffer[Long]
 
         return findAllDependency(id.uniqueId, allDependencies, map).toSeq
     }

@@ -26,8 +26,8 @@ object SimpleChiselChecker{
     def traverseData(elt: Data, d: Component):Any = elt match {
         case data: Vec[_] => {
             for(e <- data.getElements){
-                if(!hashMap.contains(s"${e.getRef.fullName(d)}")){
-                    hashMap += (s"${e.getRef.fullName(d)}" -> lists.size)
+                if(!hashMap.contains(s"${e.ref.fullName(d)}")){
+                    hashMap += (s"${e.ref.fullName(d)}" -> lists.size)
                     lists += new ListBuffer[Int]()
                 }
             }
@@ -38,8 +38,8 @@ object SimpleChiselChecker{
             }
         }
         case _ =>{
-            if(!hashMap.contains(s"${elt.getRef.fullName(d)}")){
-                hashMap += (s"${elt.getRef.fullName(d)}" -> lists.size)
+            if(!hashMap.contains(s"${elt.ref.fullName(d)}")){
+                hashMap += (s"${elt.ref.fullName(d)}" -> lists.size)
                 lists += new ListBuffer[Int]()
             }
         }
@@ -93,36 +93,36 @@ object SimpleChiselChecker{
                 port.id match {
                     case ctrl: DecoupledIOCtrlInternal =>{
                         continue = true
-                        hashMap += (s"${ctrl.in.valid.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.in.valid.ref.fullName(d)}" -> lists.size)
                         pos_of_valid_in = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.in.ready.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.in.ready.ref.fullName(d)}" -> lists.size)
                         pos_of_ready_in = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.out.valid.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.out.valid.ref.fullName(d)}" -> lists.size)
                         pos_of_valid_out = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.out.ready.ref.fullName(d)}" -> lists.size)
                         pos_of_ready_out = lists.size
                         lists += new ListBuffer[Int]()
                     }
                     case ctrl: OutOfOrderIOCtrlInternal =>{
                         continue = true
-                        hashMap += (s"${ctrl.in.valid.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.in.valid.ref.fullName(d)}" -> lists.size)
                         pos_of_valid_in = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.in.ready.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.in.ready.ref.fullName(d)}" -> lists.size)
                         pos_of_ready_in = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.out.valid.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.out.valid.ref.fullName(d)}" -> lists.size)
                         pos_of_valid_out = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.out.ready.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.out.ready.ref.fullName(d)}" -> lists.size)
                         pos_of_ready_out = lists.size
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.in.ticket_num.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.in.ticket_num.ref.fullName(d)}" -> lists.size)
                         lists += new ListBuffer[Int]()
-                        hashMap += (s"${ctrl.out.ticket_num.getRef.fullName(d)}" -> lists.size)
+                        hashMap += (s"${ctrl.out.ticket_num.ref.fullName(d)}" -> lists.size)
                         lists += new ListBuffer[Int]()
                     }
                     case _ => traverseData(port.id, d)
@@ -143,7 +143,7 @@ object SimpleChiselChecker{
           command match{
             case prim:DefPrim[_] =>{              
               traverseData(prim.id, d)
-              val idx_of_dest = hashMap(prim.id.getRef.fullName(d))
+              val idx_of_dest = hashMap(prim.id.ref.fullName(d))
               for(arg <- prim.args){
                 if(hashMap.contains(arg.fullName(d))){
                   lists(hashMap(arg.fullName(d))) += idx_of_dest
@@ -194,7 +194,7 @@ object SimpleChiselChecker{
                 lists(hashMap(c.loc.fullName(d)))  ++= driving_conditional_args
               }
             }
-            case defP: DefPrim[_] => lists(hashMap(defP.id.getRef.fullName(d)))  ++= driving_conditional_args
+            case defP: DefPrim[_] => lists(hashMap(defP.id.ref.fullName(d)))  ++= driving_conditional_args
             case _ =>()
           }
         }
