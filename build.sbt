@@ -45,6 +45,7 @@ lazy val commonSettings = Seq (
   scalaVersion := "2.12.12",
   crossScalaVersions := Seq("2.12.12", "2.11.12"),
   scalacOptions := Seq("-deprecation", "-feature") ++ scalacOptionsVersion(scalaVersion.value),
+  scalacOptions += "-language:reflectiveCalls",
   libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full),
   // Use the root project's unmanaged base for all sub-projects.
