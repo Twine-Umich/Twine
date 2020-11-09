@@ -56,6 +56,36 @@ private class Emitter(circuit: Circuit) {
     }
   }
 
+  private def emitMemType(d: Data, clearDir: Boolean = false): String = d match {
+    case d: Clock => "Clock"
+    case _: AsyncReset => "AsyncReset"
+    case _: ResetType => "Reset"
+    case d: chisel3.core.EnumType => s"UInt${d.width}"
+    case d: UInt => s"UInt${d.width}"
+    case d: SInt => s"SInt${d.width}"
+    case d: FixedPoint => s"Fixed${d.width}${d.binaryPoint}"
+    case d: Interval =>
+      val binaryPointString = d.binaryPoint match {
+        case UnknownBinaryPoint => ""
+        case KnownBinaryPoint(value) => s".$value"
+      }
+      d.toType
+    case d: Analog => s"Analog${d.width}"
+    case d: Vec[_] => s"${emitType(d.sample_element, clearDir)}[${d.length}]"
+    case d: Record => {
+      val childClearDir = clearDir ||
+          d.specifiedDirection == SpecifiedDirection.Input || d.specifiedDirection == SpecifiedDirection.Output
+      def eltPort(elt: Data): String = (childClearDir, firrtlUserDirOf(elt)) match {
+        case (true, _) =>
+          s"${elt.getRef.name} : ${emitType(elt, true)}"
+        case (false, SpecifiedDirection.Unspecified | SpecifiedDirection.Output) =>
+          s"${elt.getRef.name} : ${emitType(elt, false)}"
+        case (false, SpecifiedDirection.Flip | SpecifiedDirection.Input) =>
+          s"${elt.getRef.name} : ${emitType(elt, false)}"
+      }
+      d.elements.toIndexedSeq.reverse.map(e => eltPort(e._2)).mkString("{", ", ", "}")
+    }
+  }
   private def firrtlUserDirOf(d: Data): SpecifiedDirection = d match {
     case d: Vec[_] =>
       SpecifiedDirection.fromParent(d.specifiedDirection, firrtlUserDirOf(d.sample_element))
@@ -68,7 +98,7 @@ private class Emitter(circuit: Circuit) {
       case e: DefWire => s"wire ${e.name} : ${emitType(e.id)}"
       case e: DefReg => s"reg ${e.name} : ${emitType(e.id)}, ${e.clock.fullName(ctx)}"
       case e: DefRegInit => s"reg ${e.name} : ${emitType(e.id)}, ${e.clock.fullName(ctx)} with : (reset => (${e.reset.fullName(ctx)}, ${e.init.fullName(ctx)}))"
-      case e: DefMemory => s"cmem ${e.name} : ${emitType(e.t)}[${e.size}]"
+      case e: DefMemory => s"cmem ${e.name} : ${emitMemType(e.t)}[${e.size}]"
       case e: DefSeqMemory => s"smem ${e.name} : ${emitType(e.t)}[${e.size}], ${e.readUnderWrite}"
       case e: DefMemPort[_] => s"${e.dir} mport ${e.name} = ${e.source.fullName(ctx)}[${e.index.fullName(ctx)}], ${e.clock.fullName(ctx)}"
       case e: Connect => s"${e.loc.fullName(ctx)} <= ${e.exp.fullName(ctx)}"

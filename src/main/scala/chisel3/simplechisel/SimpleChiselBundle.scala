@@ -37,19 +37,11 @@ final class SimpleChiselBundle[T <: Data](private val eltsIn: Seq[T]) extends co
   def getElements: Seq[Data] =
     (0 until length).map(apply(_))
 
-  def expandAndAddElements(aggregate: Aggregate, buffer:ArrayBuffer[Data]): Any ={
-    for(elt <- aggregate.getElements){
-      elt match{
-        case a: Aggregate => expandAndAddElements(a, buffer)
-        case _ => buffer += elt
-      }
-    }
-  }
 
   def >>> (that: Aggregate): Aggregate = {
     val input_ports = new ArrayBuffer[Data]
     val output_ports = this.getElements
-    expandAndAddElements(that, input_ports)
+    SimpleChiselTool.expandAndAddElements(that, input_ports)
 
     for((input_port, idx) <- input_ports.zipWithIndex){
       input_port := output_ports(idx)
@@ -81,26 +73,88 @@ final class SimpleChiselBundle[T <: Data](private val eltsIn: Seq[T]) extends co
   }
 
   def >>>[T <: SimpleChiselModule](that: T): T = {
-    this >>> that.in
-    for(elt <-this.getElements){
-      if(elt._parent.isDefined){
-        elt._parent.get match{
-          case sm:SimpleChiselModuleInternal =>{
-            if(!that.from_modules.contains(sm)&& (!sm.sub_modules.contains(that))) that.from_modules += sm
-            if(!sm.to_modules.contains(that) && (!sm.sub_modules.contains(that))) 
-              sm.to_modules += that
-
-            if(sm.sub_modules.contains(that)){
-              if (!elt.to_modules.contains(that) ) 
-                elt.to_modules += that
+    if(this.getElements.size == that.in.getElements.size){
+      for((source_sub, i) <- this.getElements.zipWithIndex) {
+        (that.in.getElements(i), source_sub) match{
+          case(sink_vec: Vec[Data @unchecked], source_e: Element) =>{
+            val parallelizer = Module(new Parallelizer(source_e, sink_vec.length))
+            SimpleChiselTool.morphConnect(parallelizer.in.bits, source_e)
+            sink_vec := parallelizer.out.bits
+            that.from_modules +=  parallelizer
+            parallelizer.to_modules += that
+            if(source_e._parent.isDefined){
+              source_e._parent.get match{
+                case sm:SimpleChiselModuleInternal =>{
+                  if(!sm.sub_modules.contains(that)){
+                    sm.to_modules += parallelizer
+                    parallelizer.from_modules += sm
+                  }else{
+                    source_e.to_modules += parallelizer
+                  }
+                }
+                case _ =>()
+              }
             }
           }
-          case _ =>()
+          case(sink_e: Element, source_vec: Vec[Data @unchecked]) =>{
+            val serializer = Module(new Serializer(source_vec.sample_element, source_vec.length))
+            serializer.in.bits := source_vec
+            SimpleChiselTool.morphConnect(sink_e, serializer.out.bits)
+            that.from_modules += serializer
+            serializer.to_modules += that
+            if(source_sub._parent.isDefined){
+              source_sub._parent.get match{
+                case sm:SimpleChiselModuleInternal =>{
+                  if(!sm.sub_modules.contains(that)){
+                    sm.to_modules += serializer
+                    serializer.from_modules += sm
+                  }else{
+                    source_sub.to_modules += serializer
+                  }
+                }
+                case _ =>()
+              }
+            }
+          } // Add the transformation cases
+          case _ =>{
+            SimpleChiselTool.morphConnect(that.in.getElements(i), source_sub)
+            if(source_sub._parent.isDefined){
+              source_sub._parent.get match{
+                case sm:SimpleChiselModuleInternal =>{
+                  if(!sm.sub_modules.contains(that)){
+                    if(!that.from_modules.contains(sm)) that.from_modules += sm
+                    if(!sm.to_modules.contains(that)) sm.to_modules += that
+                  }else{
+                    if(!source_sub.to_modules.contains(that)) source_sub.to_modules += that
+                  }
+                }
+                case _ =>()
+              }
+            }
+          }
+        }
+      }
+    }else{
+      this >>> that.in
+      for(elt <-this.getElements){
+        if(elt._parent.isDefined){
+          elt._parent.get match{
+            case sm:SimpleChiselModuleInternal =>{
+              if(!that.from_modules.contains(sm)&& (!sm.sub_modules.contains(that))) that.from_modules += sm
+              if(!sm.to_modules.contains(that) && (!sm.sub_modules.contains(that))) 
+                sm.to_modules += that
+
+              if(sm.sub_modules.contains(that)){
+                if (!elt.to_modules.contains(that) ) 
+                  elt.to_modules += that
+              }
+            }
+            case _ =>()
+          }
         }
       }
     }
 
-  
     that
   }
 }

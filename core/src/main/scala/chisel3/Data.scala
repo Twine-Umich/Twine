@@ -293,7 +293,7 @@ abstract class Data extends HasId with NamedComponent with SourceInfoDoc {
 
   // User-specified direction, local at this node only.
   // Note that the actual direction of this node can differ from child and parent specifiedDirection.
-  private var _specifiedDirection: SpecifiedDirection = SpecifiedDirection.Unspecified
+  var _specifiedDirection: SpecifiedDirection = SpecifiedDirection.Unspecified
   private[chisel3] def specifiedDirection: SpecifiedDirection = _specifiedDirection
   private[chisel3] def specifiedDirection_=(direction: SpecifiedDirection) = {
     if (_specifiedDirection != SpecifiedDirection.Unspecified) {

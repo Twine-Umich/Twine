@@ -205,8 +205,10 @@ object SimpleChiselCLConnGen{
                 cmd match{
                     case connect:Connect =>{
                         if(connect.loc.uniqueId == child_ctrl.stall._id){
+                            val p_valid_ready = Builder.pushOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                PrimOp.BitAndOp, parent_ctrl.out.valid.ref, parent_ctrl.out.ready.ref))
                             val readyNegate = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
-                                    PrimOp.BitNotOp, parent_ctrl.out.ready.ref), idx)
+                                    PrimOp.BitNotOp, p_valid_ready.ref), idx)
                             val stallBus = Builder.insertOp(
                                     DefPrim(UnlocatableSourceInfo, Bool(),
                                     PrimOp.BitAndOp, connect.exp, readyNegate.ref), idx+1)
@@ -220,8 +222,10 @@ object SimpleChiselCLConnGen{
             }
         }
         if(!stall_connected){
+            val p_valid_ready = Builder.pushOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                    PrimOp.BitAndOp, parent_ctrl.out.valid.ref, parent_ctrl.out.ready.ref))
             val readyNegate = Builder.pushOp(DefPrim(UnlocatableSourceInfo, Bool(),
-                    PrimOp.BitNotOp, parent_ctrl.out.ready.ref))
+                    PrimOp.BitNotOp, p_valid_ready.ref))
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
                     Node(child_ctrl.stall, child_ctrl.stall._id), 
@@ -237,9 +241,11 @@ object SimpleChiselCLConnGen{
                 cmd match{
                     case connect:Connect =>{
                         if(connect.loc.uniqueId == child_ctrl.out.ready._id){
-                            val ready_bus = Builder.insertOp(
+                            val p_valid_ready = Builder.insertOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                                    PrimOp.BitAndOp, parent_ctrl.out.valid.ref, parent_ctrl.out.ready.ref), idx)
+                            val ready_bus= Builder.insertOp(
                                         DefPrim(UnlocatableSourceInfo, Bool(),
-                                    PrimOp.BitAndOp, connect.exp, parent_ctrl.out.ready.ref), idx)
+                                    PrimOp.BitAndOp, connect.exp, p_valid_ready.ref), idx+1)
                             connect.exp = ready_bus.ref
                             input_ready_connected = true
                             break
@@ -250,10 +256,12 @@ object SimpleChiselCLConnGen{
             }
         }
         if(!input_ready_connected){
+            val p_valid_ready = Builder.pushOp(DefPrim(UnlocatableSourceInfo, Bool(),
+                    PrimOp.BitAndOp, parent_ctrl.out.valid.ref, parent_ctrl.out.ready.ref))
             Builder.pushCommand(
                 Connect(UnlocatableSourceInfo, 
                     Node(child_ctrl.out.ready, child_ctrl.out.ready._id), 
-                    parent_ctrl.out.ready.ref))
+                    p_valid_ready.ref))
         }
     }
 
