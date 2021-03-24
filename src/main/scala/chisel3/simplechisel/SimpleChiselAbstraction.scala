@@ -62,7 +62,26 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             serializer.from_modules += this
             that.from_modules += serializer
             serializer.to_modules += that
-          } // Add the transformation cases
+          }
+          case(sink_vec: Vec[Data @unchecked], source_vec: Vec[Data @unchecked]) =>{
+            if(source_vec.length > sink_vec.length){
+              val serializer = Module(new Serializer(sink_vec, source_vec.length/ sink_vec.length))
+              serializer.in.bits := source_vec
+              sink_vec := serializer.out.bits
+              this.to_modules += serializer
+              serializer.from_modules += this
+              that.from_modules += serializer
+              serializer.to_modules += that
+            }else{
+              val parallelizer = Module(new Parallelizer(source_vec, sink_vec.length/ source_vec.length))
+              parallelizer.in.bits := source_vec
+              sink_vec := parallelizer.out.bits
+              this.to_modules += parallelizer
+              parallelizer.from_modules += this
+              that.from_modules += parallelizer
+              parallelizer.to_modules += that
+            }
+          }
           case _ =>{
             sink_sub := this.out.getElements(i)
             if (!this.to_modules.contains(that)) this.to_modules += that
@@ -361,22 +380,39 @@ abstract class SimpleChiselModule(implicit moduleCompileOptions: CompileOptions)
             }
           }
           case(sink_e: Element, source_vec: Vec[Data @unchecked]) =>{
-            val serializer = Module(new Serializer(source_vec.sample_element, source_vec.length))
-            serializer.in.bits := source_vec
-            SimpleChiselTool.morphConnect(sink_e, serializer.out.bits)
-            this.to_modules += serializer
-            serializer.from_modules += this
-            if(sink_sub._parent.isDefined){
-              sink_sub._parent.get match{
-                case sm:SimpleChiselModuleInternal =>{
-                  if(!sm.sub_modules.contains(this)){
-                    sm.from_modules += serializer
-                    serializer.to_modules += sm
-                  }else{
-                    sink_sub.from_modules += serializer
+            if(source_vec.length > 1){
+              val serializer = Module(new Serializer(source_vec.sample_element, source_vec.length))
+              serializer.in.bits := source_vec
+              SimpleChiselTool.morphConnect(sink_e, serializer.out.bits)
+              this.to_modules += serializer
+              serializer.from_modules += this
+              if(sink_sub._parent.isDefined){
+                sink_sub._parent.get match{
+                  case sm:SimpleChiselModuleInternal =>{
+                    if(!sm.sub_modules.contains(this)){
+                      sm.from_modules += serializer
+                      serializer.to_modules += sm
+                    }else{
+                      sink_sub.from_modules += serializer
+                    }
                   }
+                  case _ =>()
                 }
-                case _ =>()
+              }
+            }else{
+              SimpleChiselTool.morphConnect(sink_sub, source_vec(0))
+              if(sink_sub._parent.isDefined){
+                sink_sub._parent.get match{
+                  case sm:SimpleChiselModuleInternal =>{
+                    if(!sm.sub_modules.contains(this)){
+                      if(!this.to_modules.contains(sm)) this.to_modules += sm
+                      if(!sm.from_modules.contains(this)) sm.from_modules += this
+                    }else{
+                      if(!sink_sub.from_modules.contains(this)) sink_sub.from_modules += this
+                    }
+                  }
+                  case _ =>()
+                }
               }
             }
           } // Add the transformation cases

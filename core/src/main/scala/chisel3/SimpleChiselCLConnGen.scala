@@ -306,19 +306,50 @@ object SimpleChiselCLConnGen{
                     ready_with_stuck_stall.ref))
         }
     }
-
-    def apply(m: SimpleChiselModuleInternal): Any ={
-        val to_modules: Set[SimpleChiselModuleInternal] = Set()
-        for(sub_m <- m.in.to_modules){
-            to_modules += sub_m
-        }
-        for(elt <- m.in.getElements)
-        {
-            for(sub_m <- elt.to_modules){
-                if(!to_modules.contains(sub_m))
-                    to_modules += sub_m
+    def expandFromModules(aggregate: Aggregate, from_modules:Set[SimpleChiselModuleInternal]): Any ={
+        for(elt <- aggregate.getElements){
+            elt match{
+                case a: Aggregate => {
+                    for(sub_m <- a.from_modules){
+                        if(!from_modules.contains(sub_m))
+                            from_modules += sub_m
+                    }
+                    expandFromModules(a, from_modules)
+                }
+                case _ => {
+                    for(sub_m <- elt.from_modules){
+                        if(!from_modules.contains(sub_m))
+                            from_modules += sub_m
+                    }
+                }
             }
         }
+    }
+    def expandToModules(aggregate: Aggregate, to_modules:Set[SimpleChiselModuleInternal]): Any ={
+        for(elt <- aggregate.getElements){
+            elt match{
+                case a: Aggregate => {
+                    for(sub_m <- a.to_modules){
+                        if(!to_modules.contains(sub_m))
+                            to_modules += sub_m
+                    }
+                    expandFromModules(a, to_modules)
+                }
+                case _ => {
+                    for(sub_m <- elt.to_modules){
+                        if(!to_modules.contains(sub_m))
+                            to_modules += sub_m
+                    }
+                }
+            }
+        }
+    }
+    def apply(m: SimpleChiselModuleInternal): Any ={
+        val to_modules: Set[SimpleChiselModuleInternal] = Set()
+        val from_modules: Set[SimpleChiselModuleInternal] = Set()
+        expandToModules(m.in, to_modules)
+        expandFromModules(m.out,from_modules)
+
         for(sub_m <- to_modules){
             crossLayerInputValidTranformation(m, 
                 m.ctrl.asInstanceOf[SimpleChiselIOCtrlInternal], 
@@ -333,7 +364,7 @@ object SimpleChiselCLConnGen{
                 case _ =>()
             }
         }
-        for(sub_m <- m.out.from_modules){
+        for(sub_m <- from_modules){
             crossLayerOutputValidTranformation(m, 
                 m.ctrl.asInstanceOf[SimpleChiselIOCtrlInternal], 
                 sub_m.ctrl.asInstanceOf[SimpleChiselIOCtrlInternal])

@@ -77,42 +77,61 @@ final class SimpleChiselBundle[T <: Data](private val eltsIn: Seq[T]) extends co
       for((source_sub, i) <- this.getElements.zipWithIndex) {
         (that.in.getElements(i), source_sub) match{
           case(sink_vec: Vec[Data @unchecked], source_e: Element) =>{
-            val parallelizer = Module(new Parallelizer(source_e, sink_vec.length))
-            SimpleChiselTool.morphConnect(parallelizer.in.bits, source_e)
-            sink_vec := parallelizer.out.bits
-            that.from_modules +=  parallelizer
-            parallelizer.to_modules += that
-            if(source_e._parent.isDefined){
-              source_e._parent.get match{
-                case sm:SimpleChiselModuleInternal =>{
-                  if(!sm.sub_modules.contains(that)){
-                    sm.to_modules += parallelizer
-                    parallelizer.from_modules += sm
-                  }else{
-                    source_e.to_modules += parallelizer
+            if(sink_vec.length > 1){
+              val parallelizer = Module(new Parallelizer(source_e, sink_vec.length))
+              SimpleChiselTool.morphConnect(parallelizer.in.bits, source_e)
+              sink_vec := parallelizer.out.bits
+              that.from_modules +=  parallelizer
+              parallelizer.to_modules += that
+              if(source_e._parent.isDefined){
+                source_e._parent.get match{
+                  case sm:SimpleChiselModuleInternal =>{
+                    if(!sm.sub_modules.contains(that)){
+                      sm.to_modules += parallelizer
+                      parallelizer.from_modules += sm
+                    }else{
+                      source_e.to_modules += parallelizer
+                    }
                   }
+                  case _ =>()
                 }
-                case _ =>()
+              }
+            }else{
+              SimpleChiselTool.morphConnect(sink_vec(0), source_sub)
+              if(source_sub._parent.isDefined){
+                source_sub._parent.get match{
+                  case sm:SimpleChiselModuleInternal =>{
+                    if(!sm.sub_modules.contains(that)){
+                      if(!that.from_modules.contains(sm)) that.from_modules += sm
+                      if(!sm.to_modules.contains(that)) sm.to_modules += that
+                    }else{
+                      if(!source_sub.to_modules.contains(that)) source_sub.to_modules += that
+                    }
+                  }
+                  case _ =>()
+                }
               }
             }
           }
           case(sink_e: Element, source_vec: Vec[Data @unchecked]) =>{
-            val serializer = Module(new Serializer(source_vec.sample_element, source_vec.length))
-            serializer.in.bits := source_vec
-            SimpleChiselTool.morphConnect(sink_e, serializer.out.bits)
-            that.from_modules += serializer
-            serializer.to_modules += that
-            if(source_sub._parent.isDefined){
-              source_sub._parent.get match{
-                case sm:SimpleChiselModuleInternal =>{
-                  if(!sm.sub_modules.contains(that)){
-                    sm.to_modules += serializer
-                    serializer.from_modules += sm
-                  }else{
-                    source_sub.to_modules += serializer
+            if(source_vec.length > 1){
+              val serializer = Module(new Serializer(source_vec.sample_element, source_vec.length))
+              serializer.in.bits := source_vec
+              SimpleChiselTool.morphConnect(sink_e, serializer.out.bits)
+              that.from_modules += serializer
+              serializer.to_modules += that
+              if(source_sub._parent.isDefined){
+                source_sub._parent.get match{
+                  case sm:SimpleChiselModuleInternal =>{
+                    if(!sm.sub_modules.contains(that)){
+                      sm.to_modules += serializer
+                      serializer.from_modules += sm
+                    }else{
+                      source_sub.to_modules += serializer
+                    }
                   }
+                  case _ =>()
                 }
-                case _ =>()
               }
             }
           } // Add the transformation cases
