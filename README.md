@@ -1,7 +1,6 @@
 # Twine Specification
 
-Alpha Version 1, by Shibo Chen, Updated 9/4/2020
-
+<span style="color:red">Twine has been accepted to DATE 2022!</span>
 ## Table of Contents
 
 - [Twine Specification](#twine-specification)
