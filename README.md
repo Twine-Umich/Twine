@@ -1,5 +1,7 @@
 # Twine Specification
 
+## Recent News
+
 <span style="color:red">Twine has been accepted to DATE 2022!</span>
 ## Table of Contents
 
@@ -23,7 +25,7 @@
   - [Data Type Auto-conversion](#data-type-auto-conversion)
     - [Type Implicit Conversion](#type-implicit-conversion)
     - [Port Width Conversion](#port-width-conversion)
-
+- [Acknowledgement](#acknowledgement)
 ---
 
 ## Introduction
@@ -41,8 +43,8 @@ The Twine code-base is synced with Chisel3 newest release periodically to suppor
 To install Twine locally, run the following commands
 
 ```shell script
-git clone https://github.com/Twine/simple-chisel.git
-cd simple-chisel
+git clone https://github.com/Twine-Umich/Twine
+cd twine
 sbt publishLocal
 ```
 
@@ -50,27 +52,20 @@ sbt publishLocal
 
 All Twine features are only available when using Twine abstractions. Therefore, it is important for the module to inherit from Twine classes instead of Chisel3 classes to get access to the Twine features.
 
-Twine introduces new abstractions `TwineModule`, `TwineLogic` and `TwineState`.
+Twine introduces new abstractions `TwineModule`, `TwineBaseModule`.
 
 `TwineModule` is the root class for all Twine modules. Any module tends to use Twine features should at least inherit from `TwineModule` if not any other subclasses.
 
-`SimpleChislLogic` is a subclass of `TwineModule`. All `TwineLogic` modules cannot contain any stateful elements, i.e. `Reg` and `Mem`. Any instance of `Logic` module needs to be wrapped in `Logic()`
 
-`SimpleChislState` is a subclass of `TwineModule`. All `TwineState` modules need to contain stateful elements. Any instance of `State` module needs to
-be wrapped in `State()`
+`TwineBaseModule` can be used if the module itself does not follow Twine module requirements but contains Twine modules inside the module.
 
 ```scala
-class LogicExample extends TwineLogic{
+class Mod extends TwineModule{
   // Your code here
 }
 
-class StateExample extends TwineState{
-  // Your code here
-}
-
-class Datapth extends TwineModule{
-  val logicExample = Logic(new LogicExample)
-  val stateExample = State(new StateExample)
+class Datapth extends TwineBaseModule{
+  val logicExample = Module(new Mod)
 }
 ```
 
@@ -122,10 +117,6 @@ class TightlyCoupledIO(delay: Int) extends Bundle{
   the pipeline should suspend for the current cycle.*/
   val stall = Input(Bool())
 
-  /* When this signal is raised from the external,
-  the internal states should be cleared to the default.
-  This should not be treated as `reset` even though they may have the same behaviors under certain circumstances.*/
-  val clear = Input(Bool())
 
   /* When this signal is raised from the internal,
   it indicates that the neighboring modules would need to either stall for the current cycle or invalidate the outputs from the current module.*/
@@ -145,16 +136,11 @@ class TightlyCoupledModule extends TwineModule{
   val reg_n = Wire(UInt(64.W))
   val reg_intermediate = RegNext(reg_n)
 
-  when(crtl.clear){
-    0.U >>> reg_intermediate
+  when(ctrl.stall){ // what happens if it should stall
+    reg_intermediate >>> reg_n
   }
   .otherwise{
-    when(ctrl.stall){ // what happens if it should stall
-      reg_intermediate >>> reg_n
-    }
-    .otherwise{
-        (in.d_in + 1.U) >>> reg_n
-    }
+      (in.d_in + 1.U) >>> reg_n
   }
 
   // Suppose d_in === 0.U is a very special case that causes the pipeline to stuck
@@ -173,7 +159,6 @@ class Wrapper extends TwineModule{
 
   // An example of how to contrl the module
   false.B >>> tightlyCoupledIOModule.ctrl.stall
-  false.B >>> tightlyCoupledIOModule.ctrl.clear
   when(tightlyCoupledIOModule.ctrl.stuck){
     // Implement the behaviors when the module is stuck
   }
@@ -189,11 +174,6 @@ class ValidIO extends Bundle{
   /* When this signal is raised from the external,
   the pipeline should suspend for the current cycle.*/
   val stall = Input(Bool())
-
-  /* When this signal is raised from the external,
-  the internal states should be cleared to the default.
-  This should not be treated as `reset` even though they may have the same behaviors under certain circumstances.*/
-  val clear = Input(Bool())
 
   /* When this signal is raised from the internal,
   it indicates that the neighboring modules would need to either stall for the current cycle or invalidate the outputs from the current module.*/
@@ -226,19 +206,14 @@ class ValidIOModule extends TwineModule{
 
   val reg_valid_n = Wire(Bool())
   val reg_valid = RegNext(reg_valid_n)
-  when(crtl.clear){
-    0.U >>> reg_intermediate
-    0.U >>> reg_valid
+
+  when(ctrl.stall){ // what happens if it should stall
+    reg_intermediate >>> reg_n
+    reg_valid >>> reg_valid_n
   }
   .otherwise{
-    when(ctrl.stall){ // what happens if it should stall
-      reg_intermediate >>> reg_n
-      reg_valid >>> reg_valid_n
-    }
-    .otherwise{
-        (in.d_in + 1.U) >>> reg_n
-        ctrl.in.valid >>> reg_n
-    }
+      (in.d_in + 1.U) >>> reg_n
+      ctrl.in.valid >>> reg_n
   }
 
   // Suppose d_in === 0.U is a very special case that causes the pipeline to stuck
@@ -258,7 +233,6 @@ class Wrapper extends TwineModule{
 
   // An example of how to contrl the module
   false.B >>> validIOModule.ctrl.stall
-  false.B >>> validIOModule.ctrl.clear
   true.B >>> validIOModule.ctrl.in.valid
   when(validIOModule.ctrl.stuck){
     // Implement the behaviors when the module is stuck
@@ -277,11 +251,6 @@ If `0` is specified, there is no buffer generated. However, this is greatly disc
 
 ```scala
 class DecoupledIO(val size_of_receiving_buffer: Int, val size_of_receiving_buffer: Int) extends Bundle{
-
-  /* When this signal is raised from the external,
-  the internal states should be cleared to the default.
-  This should not be treated as `reset` even though they may have the same behaviors under certain circumstances.*/
-  val clear = Input(Bool())
 
   /* A set of DecoupledIO signals at the input ends
   */
@@ -313,19 +282,14 @@ class DecoupledIOModule extends TwineModule{
 
   val reg_valid_n = Wire(Bool())
   val reg_valid = RegNext(reg_valid_n)
-  when(crtl.clear){
-    0.U >>> reg_intermediate
-    0.U >>> reg_valid
+
+  when(!ctrl.out.ready){ // When the downstream is not ready for outputs
+    reg_intermediate >>> reg_n
+    reg_valid >>> reg_valid_n
   }
   .otherwise{
-    when(!ctrl.out.ready){ // When the downstream is not ready for outputs
-      reg_intermediate >>> reg_n
-      reg_valid >>> reg_valid_n
-    }
-    .otherwise{
-        (in.d_in + 1.U) >>> reg_n
-        ctrl.in.valid >>> reg_n
-    }
+      (in.d_in + 1.U) >>> reg_n
+      ctrl.in.valid >>> reg_n
   }
 
   // Assign the output
@@ -342,7 +306,6 @@ class Wrapper extends TwineModule{
   val decoupledIOModule = Module(new DecoupledIOModule)
 
   // An example of how to contrl the module
-  false.B >>> decoupledIOModule.ctrl.clear
   true.B >>> decoupledIOModule.ctrl.in.valid
   true.B >>> decoupledIOModule.out.ready
   when(decoupledIOModule.ctrl.in.ready){
@@ -362,11 +325,6 @@ If `0` is specified, there is no buffer generated. However, this is greatly disc
 
 ```scala
 class OutOfOrderIOIO(val size_of_reorder_buffer: Int) extends Bundle{
-
-  /* When this signal is raised from the external,
-  the internal states should be cleared to the default.
-  This should not be treated as `reset` even though they may have the same behaviors under certain circumstances.*/
-  val clear = Input(Bool())
 
   /* A set of DecoupledIO signals at the input ends
   */
@@ -403,21 +361,16 @@ class OutOfOrderIOModule extends TwineModule{
 
   val reg_ticket_num_n = chiselTypeOf(ctrl.in.tick_num)
   val reg_ticket_num = RegNext(reg_ticket_num_n)
-  when(crtl.clear){
-    0.U >>> reg_intermediate
-    0.U >>> reg_valid
+ 
+  when(!ctrl.out.ready){ // When the downstream is not ready for outputs
+    reg_intermediate >>> reg_n
+    reg_valid >>> reg_valid_n
+    reg_ticket_num >>> reg_ticket_num_n
   }
   .otherwise{
-    when(!ctrl.out.ready){ // When the downstream is not ready for outputs
-      reg_intermediate >>> reg_n
-      reg_valid >>> reg_valid_n
-      reg_ticket_num >>> reg_ticket_num_n
-    }
-    .otherwise{
-        (in.d_in + 1.U) >>> reg_n
-        ctrl.in.valid >>> reg_n
-        ctrk.in.ticket_in >>> reg_ticket_num
-    }
+      (in.d_in + 1.U) >>> reg_n
+      ctrl.in.valid >>> reg_n
+      ctrk.in.ticket_in >>> reg_ticket_num
   }
 
   // Assign the output
@@ -435,7 +388,6 @@ class Wrapper extends TwineModule{
   val outOfOrderIOModule = Module(new OutOfOrderIOModule)
 
   // An example of how to contrl the module
-  false.B >>> outOfOrderIOModule.ctrl.clear
   true.B >>> outOfOrderIOModule.ctrl.in.valid
   true.B >>> outOfOrderIOModule.out.ready
 
@@ -517,7 +469,7 @@ N-to-1 is similar thus we would not elaborate further here.
 
 ### Cross Level Connection
 
-Cross layer is when you are wrapping multiple `TwineModule`s under one high-level `TwineModule`. You can connect the port of the higher level module to the lower level modules by using `this` or by using the `in` and `out` pair. The `clear` signal from the higher level would override the low level modules, which means if it clears at the high-level, the lower-level would also be cleared.
+Cross layer is when you are wrapping multiple `TwineModule`s under one high-level `TwineModule`. You can connect the port of the higher level module to the lower level modules by using `this` or by using the `in` and `out` pair.
 
 ## Data Type Auto-conversion
 
@@ -543,3 +495,7 @@ b >>> c // This will serialize the data
 a >>> b // Since b is twice as wide as a, this will de-serialize the data stream
 b >>> a // Since b is twice as wide as a, this will serialize the data stream
 ```
+
+### Acknowledgement
+
+This work was supported by the Applications Driving Architectures (ADA) Research Center, a JUMP Center co-sponsored by SRC and DARPA.
