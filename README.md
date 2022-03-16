@@ -2,6 +2,11 @@
 
 ## Recent News
 
+## Demo
+
+Please refer https://github.com/Twine-Umich/q100 for a Q100-like demo!
+
+
 <span style="color:red">Twine has been accepted to DATE 2022!</span>
 ## Table of Contents
 
@@ -82,14 +87,14 @@ moduleA >>> moduleB
    moduleB.in.port := port // Connect it to B's input
  }
 */
-bundle >>> module
+TwineBundle(.., .. ,..) >>> module
 /* This is equivalent to
  foreach( port <- bundle){ // for each port in bundle
    module.in.port := port // Connect it to module's input
  }
 */
 
- module >>> bundle
+ module >>> TwineBundle(.., .. ,..) 
 /* This is equivalent to
  foreach( port <- module.out){ // for each port in module's output
    module.in.port := port // Connect it to bundle
@@ -473,7 +478,7 @@ Cross layer is when you are wrapping multiple `TwineModule`s under one high-leve
 
 ## Data Type Auto-conversion
 
-Twine also support automatic type conversions when connecting modules together.
+Twine also support automatic type conversions when connecting modules together. Currently we support `SInt` <--> `UInt`, `HardFloat` <--> `SInt/UInt`
 
 ### Type Implicit Conversion
 
@@ -499,3 +504,7 @@ b >>> a // Since b is twice as wide as a, this will serialize the data stream
 ### Acknowledgement
 
 This work was supported by the Applications Driving Architectures (ADA) Research Center, a JUMP Center co-sponsored by SRC and DARPA.
+
+### License
+
+This work is an open-source project under Apache 2.0.
